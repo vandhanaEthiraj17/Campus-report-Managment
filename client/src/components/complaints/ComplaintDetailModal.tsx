@@ -5,8 +5,14 @@ import { StatusBadge } from '../common/StatusBadge';
 import { PriorityBadge } from '../common/PriorityBadge';
 import { TimelineVisualizer } from './TimelineVisualizer';
 import { useAuth } from '../../context/AuthContext';
-import { X, MapPin, User, Wrench, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { X, MapPin, User, Wrench, CheckCircle2, Image as ImageIcon, Upload } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
+
+const isVideoUrl = (url: string) => {
+  if (!url) return false;
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+  return videoExtensions.some(ext => url.toLowerCase().endsWith(ext) || url.includes('/video/'));
+};
 
 interface ComplaintDetailModalProps {
   complaintId: string | null;
@@ -28,6 +34,32 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
   // Staff Resolve State
   const [afterImageUrl, setAfterImageUrl] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleStaffFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await api.post('/complaints/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (res.data && res.data.url) {
+        setAfterImageUrl(res.data.url);
+      }
+    } catch (err: any) {
+      console.error('File upload failed', err);
+      alert(err.response?.data?.message || 'Failed to upload file.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Student Verify State
   const [rating, setRating] = useState(5);
@@ -229,11 +261,19 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
                   <div className="glass-card rounded-xl p-3 border border-slate-200">
                     <span className="text-xs font-bold text-rose-600 block mb-2">📸 Reported Before Repair</span>
                     {complaint.beforeImages && complaint.beforeImages.length > 0 ? (
-                      <img
-                        src={complaint.beforeImages[0]}
-                        alt="Before Repair"
-                        className="h-48 w-full object-cover rounded-lg border border-slate-200 bg-slate-50"
-                      />
+                      isVideoUrl(complaint.beforeImages[0]) ? (
+                        <video
+                          src={complaint.beforeImages[0]}
+                          className="h-48 w-full object-cover rounded-lg border border-slate-200 bg-slate-50"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={complaint.beforeImages[0]}
+                          alt="Before Repair"
+                          className="h-48 w-full object-cover rounded-lg border border-slate-200 bg-slate-50"
+                        />
+                      )
                     ) : (
                       <div className="h-48 w-full rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-xs text-slate-400 italic font-medium">
                         No Before Image Provided
@@ -246,11 +286,19 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
                     <span className="text-xs font-bold text-emerald-600 block mb-2">✅ After Repair Proof</span>
                     {complaint.afterImages && complaint.afterImages.length > 0 ? (
                       <div>
-                        <img
-                          src={complaint.afterImages[0]}
-                          alt="After Repair"
-                          className="h-48 w-full object-cover rounded-lg border border-emerald-250 bg-slate-50"
-                        />
+                        {isVideoUrl(complaint.afterImages[0]) ? (
+                          <video
+                            src={complaint.afterImages[0]}
+                            className="h-48 w-full object-cover rounded-lg border border-emerald-250 bg-slate-50"
+                            controls
+                          />
+                        ) : (
+                          <img
+                            src={complaint.afterImages[0]}
+                            alt="After Repair"
+                            className="h-48 w-full object-cover rounded-lg border border-emerald-250 bg-slate-50"
+                          />
+                        )}
                         {complaint.resolutionNotes && (
                           <p className="text-[11px] text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200 font-semibold">
                             Notes: {complaint.resolutionNotes}
@@ -349,15 +397,63 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
                     <div className="space-y-3">
                       <div>
                         <label className="text-[11px] text-slate-600 font-bold block mb-1">
-                          After Repair Image URL (Proof of Work)
+                          After Repair Photo/Video (Proof of Work)
                         </label>
-                        <input
-                          type="url"
-                          value={afterImageUrl}
-                          onChange={(e) => setAfterImageUrl(e.target.value)}
-                          placeholder="Paste resolved repair image link..."
-                          className="w-full glass-input rounded-xl px-3 py-2 text-xs"
-                        />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                          {/* File upload */}
+                          <div className="relative border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors bg-white/40">
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={handleStaffFileUpload}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              disabled={isUploading}
+                            />
+                            {isUploading ? (
+                              <>
+                                <div className="h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-[10px] font-semibold text-emerald-600">Uploading proof...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-5 w-5 text-slate-400" />
+                                <span className="text-[10px] font-semibold text-slate-655 font-medium">Click to upload photo/video</span>
+                                <span className="text-[8px] text-slate-400 text-center">Opens Gallery on Mobile, Files on PC</span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* URL Paste */}
+                          <div className="flex flex-col justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Or Paste Web URL</span>
+                            <input
+                              type="url"
+                              value={afterImageUrl}
+                              onChange={(e) => setAfterImageUrl(e.target.value)}
+                              placeholder="Paste link..."
+                              className="w-full glass-input rounded-xl px-2.5 py-1.5 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        {afterImageUrl && (
+                          <div className="relative h-28 w-full rounded-lg overflow-hidden border border-slate-200 mt-2 bg-slate-100 flex items-center justify-center">
+                            {isVideoUrl(afterImageUrl) ? (
+                              <video src={afterImageUrl} className="h-full w-full object-contain bg-black" controls />
+                            ) : (
+                              <img src={afterImageUrl} alt="After repair proof preview" className="h-full w-full object-contain" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setAfterImageUrl('')}
+                              className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                              title="Clear upload"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div>

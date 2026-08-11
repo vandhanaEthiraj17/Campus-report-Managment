@@ -50,17 +50,18 @@ const seedData = async () => {
 
     console.log('[Seed] Seeding Locations...');
     const locations = await Location.create([
-      { buildingName: 'Main Academic Block', floor: 'Ground Floor', roomNumber: 'Room 101' },
-      { buildingName: 'Main Academic Block', floor: 'Ground Floor', roomNumber: 'Computer Lab 1' },
-      { buildingName: 'Main Academic Block', floor: 'Ground Floor', roomNumber: 'Washroom East Wing' },
-      { buildingName: 'Main Academic Block', floor: '1st Floor', roomNumber: 'Seminar Hall A' },
-      { buildingName: 'Main Academic Block', floor: '1st Floor', roomNumber: 'Room 204' },
-      { buildingName: 'Main Academic Block', floor: '2nd Floor', roomNumber: 'Auditorium' },
-      { buildingName: 'Engineering Wing A', floor: 'Ground Floor', roomNumber: 'Mechanical Workshop' },
-      { buildingName: 'Engineering Wing A', floor: '1st Floor', roomNumber: 'Robotics Lab' },
-      { buildingName: 'Science Laboratory Block', floor: 'Ground Floor', roomNumber: 'Chemistry Lab' },
-      { buildingName: 'Central Library', floor: 'Ground Floor', roomNumber: 'Digital Reading Room' },
-      { buildingName: 'Student Hostel Block 1', floor: '1st Floor', roomNumber: 'Room 108' },
+      { buildingName: 'Main Block', floor: '1st Floor', roomNumber: 'Room 101' },
+      { buildingName: 'Main Block', floor: '1st Floor', roomNumber: 'Computer Lab 1' },
+      { buildingName: 'Main Block', floor: '1st Floor', roomNumber: 'Washroom East Wing' },
+      { buildingName: 'Main Block', floor: '2nd Floor', roomNumber: 'Seminar Hall A' },
+      { buildingName: 'Main Block', floor: '2nd Floor', roomNumber: 'Room 204' },
+      { buildingName: 'Main Block', floor: '3rd Floor', roomNumber: 'Auditorium' },
+      { buildingName: 'MBA Block', floor: '1st Floor', roomNumber: 'Room 108' },
+      { buildingName: 'Arch Block', floor: '1st Floor', roomNumber: 'Studio A' },
+      { buildingName: 'Civil Block', floor: '1st Floor', roomNumber: 'Mechanical Workshop' },
+      { buildingName: 'Canteen', floor: '1st Floor', roomNumber: 'Main Hall' },
+      { buildingName: 'Stores', floor: '1st Floor', roomNumber: 'Inventory Room 1' },
+      { buildingName: 'Library Block', floor: '1st Floor', roomNumber: 'Digital Reading Room' },
     ]);
 
     console.log('[Seed] Seeding Demo Accounts...');

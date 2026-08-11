@@ -33,7 +33,7 @@ const MainContent: React.FC = () => {
         {(user.role === 'STUDENT' || user.role === 'FACULTY') && <StudentDashboard />}
       </main>
       <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500 glass-nav">
-        Smart Campus Issue Reporting & Maintenance Management System • Full Stack Architecture Project
+        Smart Campus Issue Reporting & Maintenance Management System
       </footer>
     </div>
   );

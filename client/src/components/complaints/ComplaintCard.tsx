@@ -5,6 +5,12 @@ import { PriorityBadge } from '../common/PriorityBadge';
 import { MapPin, ThumbsUp, ArrowRight, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
+const isVideoUrl = (url: string) => {
+  if (!url) return false;
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+  return videoExtensions.some(ext => url.toLowerCase().endsWith(ext) || url.includes('/video/'));
+};
+
 interface ComplaintCardProps {
   complaint: IComplaint;
   onSelect: (complaint: IComplaint) => void;
@@ -45,11 +51,21 @@ export const ComplaintCard: React.FC<ComplaintCardProps> = ({ complaint, onSelec
         {/* Image & Location Preview */}
         <div className="flex items-center gap-3 mb-4">
           {complaint.beforeImages && complaint.beforeImages.length > 0 ? (
-            <img
-              src={complaint.beforeImages[0]}
-              alt="Issue Before Repair"
-              className="h-16 w-20 object-cover rounded-lg border border-slate-200 bg-slate-50"
-            />
+            isVideoUrl(complaint.beforeImages[0]) ? (
+              <video
+                src={complaint.beforeImages[0]}
+                className="h-16 w-20 object-cover rounded-lg border border-slate-200 bg-slate-50"
+                muted
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <img
+                src={complaint.beforeImages[0]}
+                alt="Issue Before Repair"
+                className="h-16 w-20 object-cover rounded-lg border border-slate-200 bg-slate-50"
+              />
+            )
           ) : (
             <div className="h-16 w-20 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-medium">
               No Photo
