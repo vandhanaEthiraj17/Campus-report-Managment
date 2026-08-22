@@ -11,6 +11,7 @@ export interface IUser extends Document {
   phone?: string;
   avatarUrl?: string;
   isActive: boolean;
+  isEmailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,7 @@ const userSchema = new Schema<IUser>(
     phone: { type: String, trim: true },
     avatarUrl: { type: String },
     isActive: { type: Boolean, default: true },
+    isEmailVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

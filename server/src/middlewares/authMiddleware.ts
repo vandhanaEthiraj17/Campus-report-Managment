@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { UserRole } from '../models/User';
+import { User, UserRole } from '../models/User';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -14,7 +14,7 @@ export interface AuthRequest extends Request {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'smart_campus_super_secret_key_2026';
 
-export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -31,7 +31,31 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
       name: string;
       department?: string;
     };
-    req.user = decoded;
+
+    // Verify user in database to ensure role, active state, and verification are valid and up to date
+    const dbUser = await User.findById(decoded.userId);
+    if (!dbUser) {
+      res.status(401).json({ message: 'Authentication failed. User does not exist.' });
+      return;
+    }
+
+    if (!dbUser.isActive) {
+      res.status(403).json({ message: 'Your account is currently inactive. Please contact the administrator.' });
+      return;
+    }
+
+    if (!dbUser.isEmailVerified) {
+      res.status(403).json({ message: 'Please verify your college email before accessing this resource.' });
+      return;
+    }
+
+    req.user = {
+      userId: dbUser._id.toString(),
+      email: dbUser.email,
+      role: dbUser.role,
+      name: dbUser.name,
+      department: dbUser.department,
+    };
     next();
   } catch (err) {
     res.status(403).json({ message: 'Invalid or expired access token.' });

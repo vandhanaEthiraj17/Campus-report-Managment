@@ -76,6 +76,7 @@ const seedData = async () => {
       department: 'Computer Science',
       phone: '+91 9123456789',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
+      isEmailVerified: true,
     });
 
     const faculty = await User.create({
@@ -86,6 +87,7 @@ const seedData = async () => {
       department: 'Electrical Engineering',
       phone: '+91 9123456790',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
+      isEmailVerified: true,
     });
 
     const admin = await User.create({
@@ -96,6 +98,7 @@ const seedData = async () => {
       department: 'Estate Management',
       phone: '+91 9123456791',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
+      isEmailVerified: true,
     });
 
     const elecStaff = await User.create({
@@ -106,6 +109,7 @@ const seedData = async () => {
       department: 'Electrical Maintenance',
       phone: '+91 9123456792',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Robert',
+      isEmailVerified: true,
     });
 
     const plumbStaff = await User.create({
@@ -116,6 +120,7 @@ const seedData = async () => {
       department: 'Plumbing Unit',
       phone: '+91 9123456793',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael',
+      isEmailVerified: true,
     });
 
     const itStaff = await User.create({
@@ -126,6 +131,7 @@ const seedData = async () => {
       department: 'IT & Multimedia Support',
       phone: '+91 9123456794',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=David',
+      isEmailVerified: true,
     });
 
     console.log('[Seed] Seeding Initial Demo Complaints...');

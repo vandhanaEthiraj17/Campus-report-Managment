@@ -15,6 +15,7 @@ interface AuthContextType {
     department?: string;
     phone?: string;
   }) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => void;
   quickSwitchRole: (targetRole: UserRole) => Promise<void>;
 }
@@ -71,6 +72,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await api.post('/auth/register', data);
+      const { token: authToken, user: userData } = res.data;
+      localStorage.setItem('smart_campus_token', authToken);
+      setToken(authToken);
+      setUser(userData);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyOtp = async (email: string, otp: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.post('/auth/register-verify-otp', { email, otp });
       const { token: authToken, user: userData } = res.data;
       localStorage.setItem('smart_campus_token', authToken);
       setToken(authToken);
