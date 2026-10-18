@@ -3,10 +3,13 @@ import api from '../../services/api';
 import type { IComplaint, IAnalyticsOverview } from '../../types/index';
 import { ComplaintCard } from '../../components/complaints/ComplaintCard';
 import { ComplaintDetailModal } from '../../components/complaints/ComplaintDetailModal';
-import { Users, User, AlertCircle, Clock, CheckCircle2, AlertTriangle, TrendingUp, Wrench, Download, Plus, Search, FileText, Check, X, ShieldAlert, Shield, Mail, KeyRound, Phone, Briefcase } from 'lucide-react';
+import { AssetManagementTab } from '../../components/admin/AssetManagementTab';
+import { MaintenanceIntelligenceTab } from '../../components/admin/MaintenanceIntelligenceTab';
+import { LifecycleSustainabilityTab } from '../../components/admin/LifecycleSustainabilityTab';
+import { Users, User, AlertCircle, Clock, CheckCircle2, AlertTriangle, TrendingUp, Wrench, Download, Plus, Search, FileText, Check, X, ShieldAlert, Shield, Mail, KeyRound, Phone, Briefcase, Lock, Package, Brain } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'complaints' | 'users' | 'audit'>('complaints');
+  const [activeTab, setActiveTab] = useState<'complaints' | 'assets' | 'intelligence' | 'lifecycle' | 'users' | 'audit'>('complaints');
 
   // Original Admin Dashboard state
   const [analytics, setAnalytics] = useState<IAnalyticsOverview | null>(null);
@@ -15,6 +18,7 @@ export const AdminDashboard: React.FC = () => {
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [filterDept, setFilterDept] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'named' | 'anonymous'>('all');
 
   // User Directory & Creation state
   const [users, setUsers] = useState<any[]>([]);
@@ -41,6 +45,7 @@ export const AdminDashboard: React.FC = () => {
           params: {
             department: filterDept || undefined,
             priority: filterPriority || undefined,
+            type: filterType !== 'all' ? filterType : undefined,
           },
         }),
       ]);
@@ -85,7 +90,7 @@ export const AdminDashboard: React.FC = () => {
     } else if (activeTab === 'audit') {
       fetchAuditLogs();
     }
-  }, [activeTab, filterDept, filterPriority]);
+  }, [activeTab, filterDept, filterPriority, filterType]);
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
@@ -236,6 +241,39 @@ export const AdminDashboard: React.FC = () => {
           Complaints & Dispatch
         </button>
         <button
+          onClick={() => setActiveTab('assets')}
+          className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit flex items-center gap-1.5 ${
+            activeTab === 'assets'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Package className="h-3.5 w-3.5" />
+          Campus Assets & Maintenance
+        </button>
+        <button
+          onClick={() => setActiveTab('intelligence')}
+          className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit flex items-center gap-1.5 ${
+            activeTab === 'intelligence'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Brain className="h-3.5 w-3.5 text-indigo-500" />
+          Maintenance Intelligence
+        </button>
+        <button
+          onClick={() => setActiveTab('lifecycle')}
+          className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit flex items-center gap-1.5 ${
+            activeTab === 'lifecycle'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+          Lifecycle & Sustainability
+        </button>
+        <button
           onClick={() => setActiveTab('users')}
           className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit ${
             activeTab === 'users'
@@ -260,14 +298,80 @@ export const AdminDashboard: React.FC = () => {
       {/* Tab Contents: 1. Complaints & Dispatch */}
       {activeTab === 'complaints' && (
         <>
+          {/* Campus Facility Infrastructure Status Strip */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="glass-card rounded-xl p-3 border border-slate-200/80 flex items-center gap-3">
+              <img
+                src="/campus_main.png"
+                alt="Main Building"
+                className="h-12 w-16 rounded-lg object-cover shadow-xs"
+              />
+              <div>
+                <p className="text-xs font-bold text-slate-800">Main Campus & Administration</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">Optimal</span>
+                  <span className="text-[10px] text-slate-400">Auditorium & Offices</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-xl p-3 border border-slate-200/80 flex items-center gap-3">
+              <img
+                src="/campus_academic_block.png"
+                alt="Academic Wing"
+                className="h-12 w-16 rounded-lg object-cover shadow-xs"
+              />
+              <div>
+                <p className="text-xs font-bold text-slate-800">Academic & Engineering Wing</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.2 rounded">Active SLA</span>
+                  <span className="text-[10px] text-slate-400">Rooms 101-304</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-xl p-3 border border-slate-200/80 flex items-center gap-3">
+              <img
+                src="/campus_computer_lab.png"
+                alt="Computer Labs"
+                className="h-12 w-16 rounded-lg object-cover shadow-xs"
+              />
+              <div>
+                <p className="text-xs font-bold text-slate-800">Central Digital Computer Labs</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">99.8% Uptime</span>
+                  <span className="text-[10px] text-slate-400">IT & Multimedia</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Metric Cards Strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             <div className="glass-card rounded-xl p-4 border border-slate-200 space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Tickets</span>
                 <AlertCircle className="h-4 w-4 text-blue-650" />
               </div>
               <p className="text-2xl font-bold text-slate-800 font-outfit">{metrics?.totalComplaints || 0}</p>
+            </div>
+
+            <div className="glass-card rounded-xl p-4 border border-rose-200 bg-rose-50/50 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">🚨 Women / SOS</span>
+                <ShieldAlert className="h-4 w-4 text-rose-600 animate-pulse" />
+              </div>
+              <p className="text-2xl font-bold text-rose-800 font-outfit">
+                {complaints.filter((c) => c.isEmergency || c.emergencyAlertSent || /women|safety|emergency/i.test(`${c.title} ${c.categoryName || ''}`)).length}
+              </p>
+            </div>
+
+            <div className="glass-card rounded-xl p-4 border border-slate-200 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Anonymous</span>
+                <Lock className="h-4 w-4 text-amber-600" />
+              </div>
+              <p className="text-2xl font-bold text-amber-700 font-outfit">{metrics?.anonymousCount || 0}</p>
             </div>
 
             <div className="glass-card rounded-xl p-4 border border-slate-200 space-y-1">
@@ -296,7 +400,7 @@ export const AdminDashboard: React.FC = () => {
               </p>
             </div>
 
-            <div className="glass-card rounded-xl p-4 border border-slate-200 space-y-1 col-span-2 lg:col-span-1">
+            <div className="glass-card rounded-xl p-4 border border-slate-200 space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SLA Breached</span>
                 <AlertTriangle className="h-4 w-4 text-rose-600" />
@@ -369,13 +473,51 @@ export const AdminDashboard: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-800 font-outfit">Master Dispatch Queue ({complaints.length})</h2>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+                {/* Complaint Type Switcher */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setFilterType('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      filterType === 'all'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterType('named')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      filterType === 'named'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Named
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterType('anonymous')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                      filterType === 'anonymous'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs'
+                        : 'text-slate-500 hover:text-amber-800'
+                    }`}
+                  >
+                    <span>🔒</span> Anonymous
+                  </button>
+                </div>
+
                 <select
                   value={filterDept}
                   onChange={(e) => setFilterDept(e.target.value)}
-                  className="glass-input rounded-xl px-3 py-2 text-xs w-full sm:w-48"
+                  className="glass-input rounded-xl px-3 py-2 text-xs w-full sm:w-44"
                 >
                   <option value="" className="bg-white text-slate-800">All Departments</option>
+                  <option value="Security & Women Safety Cell" className="bg-white text-slate-800">🚨 Security & Women Safety</option>
                   <option value="Electrical Maintenance" className="bg-white text-slate-800">Electrical Maintenance</option>
                   <option value="Plumbing Unit" className="bg-white text-slate-800">Plumbing Unit</option>
                   <option value="IT & Multimedia Support" className="bg-white text-slate-800">IT & Support</option>
@@ -388,7 +530,7 @@ export const AdminDashboard: React.FC = () => {
                   className="glass-input rounded-xl px-3 py-2 text-xs w-full sm:w-36"
                 >
                   <option value="" className="bg-white text-slate-800">All Priorities</option>
-                  <option value="Urgent" className="bg-white text-slate-800">Urgent</option>
+                  <option value="Urgent" className="bg-white text-slate-800">🚨 Urgent (SMS Alert)</option>
                   <option value="High" className="bg-white text-slate-800">High</option>
                   <option value="Medium" className="bg-white text-slate-800">Medium</option>
                   <option value="Low" className="bg-white text-slate-800">Low</option>
@@ -618,6 +760,15 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Tab Contents: 4. Campus Assets & Maintenance */}
+      {activeTab === 'assets' && <AssetManagementTab />}
+
+      {/* Tab Contents: 5. Maintenance Intelligence */}
+      {activeTab === 'intelligence' && <MaintenanceIntelligenceTab />}
+
+      {/* Tab Contents: 6. Lifecycle & Sustainability */}
+      {activeTab === 'lifecycle' && <LifecycleSustainabilityTab />}
 
       {/* Admin Dispatch Modal */}
       <ComplaintDetailModal

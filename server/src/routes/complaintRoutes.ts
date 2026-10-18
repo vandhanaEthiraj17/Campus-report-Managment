@@ -9,6 +9,9 @@ import {
   updateStatus,
   resolveComplaint,
   verifyComplaint,
+  translateVoiceInput,
+  triggerEmergencyAlertManual,
+  getEmergencyLogs,
 } from '../controllers/complaintController';
 import { authenticateToken, authorizeRoles } from '../middlewares/authMiddleware';
 import multer from 'multer';
@@ -62,10 +65,13 @@ router.post('/upload', upload.single('file'), (req: any, res: any) => {
 });
 
 router.get('/check-duplicate', checkDuplicates);
+router.post('/translate', translateVoiceInput);
+router.get('/emergency-logs', getEmergencyLogs);
 router.post('/', createComplaint);
 router.get('/', getComplaints);
 router.get('/:id', getComplaintById);
 router.post('/:id/upvote', upvoteComplaint);
+router.post('/:id/emergency-notify', authorizeRoles('ADMIN', 'STAFF'), triggerEmergencyAlertManual);
 router.patch('/:id/assign', authorizeRoles('ADMIN'), assignComplaint);
 router.patch('/:id/status', updateStatus);
 router.post('/:id/resolve', authorizeRoles('STAFF', 'ADMIN'), resolveComplaint);

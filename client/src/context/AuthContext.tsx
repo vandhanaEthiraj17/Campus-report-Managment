@@ -6,18 +6,21 @@ interface AuthContextType {
   user: IUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  registerUser: (data: {
-    name: string;
-    email: string;
+  login: (identifier: string, password: string, role?: UserRole) => Promise<void>;
+  verifyIdentity: (
+    identifier: string,
+    dob: string,
+    role: UserRole
+  ) => Promise<{ success: boolean; message: string; name: string; department: string; identifier: string; role: string }>;
+  register: (data: {
+    identifier: string;
+    dob: string;
     password: string;
+    confirmPassword: string;
     role: UserRole;
-    department?: string;
-    phone?: string;
   }) => Promise<void>;
-  verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => void;
-  quickSwitchRole: (targetRole: UserRole) => Promise<void>;
+  quickSwitchRole: (role: UserRole) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,50 +51,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchUser();
   }, [token]);
 
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/login', { email, password });
-      const { token: authToken, user: userData } = res.data;
-      localStorage.setItem('smart_campus_token', authToken);
-      setToken(authToken);
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
+  const login = async (identifier: string, password: string, role?: UserRole) => {
+    const res = await api.post('/auth/login', { identifier, password, role });
+    const { token: authToken, user: userData } = res.data;
+    localStorage.setItem('smart_campus_token', authToken);
+    setToken(authToken);
+    setUser(userData);
   };
 
-  const registerUser = async (data: {
-    name: string;
-    email: string;
+  const verifyIdentity = async (identifier: string, dob: string, role: UserRole) => {
+    const res = await api.post('/auth/verify-identity', { identifier, dob, role });
+    return res.data;
+  };
+
+  const register = async (data: {
+    identifier: string;
+    dob: string;
     password: string;
+    confirmPassword: string;
     role: UserRole;
-    department?: string;
-    phone?: string;
   }) => {
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/register', data);
-      const { token: authToken, user: userData } = res.data;
-      localStorage.setItem('smart_campus_token', authToken);
-      setToken(authToken);
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const verifyOtp = async (email: string, otp: string) => {
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/register-verify-otp', { email, otp });
-      const { token: authToken, user: userData } = res.data;
-      localStorage.setItem('smart_campus_token', authToken);
-      setToken(authToken);
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
+    const res = await api.post('/auth/register', data);
+    const { token: authToken, user: userData } = res.data;
+    localStorage.setItem('smart_campus_token', authToken);
+    setToken(authToken);
+    setUser(userData);
   };
 
   const logout = () => {
@@ -100,15 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  // Quick switch role utility for effortless demoing during evaluation
   const quickSwitchRole = async (targetRole: UserRole) => {
-    const roleEmails: Record<UserRole, string> = {
-      STUDENT: 'student@campus.edu',
-      FACULTY: 'faculty@campus.edu',
-      ADMIN: 'admin@campus.edu',
-      STAFF: 'elec.staff@campus.edu',
-    };
-    await login(roleEmails[targetRole], 'password123');
+    let identifier = '6176AC21UCS143';
+    if (targetRole === 'FACULTY') identifier = 'FAC-CSE-001';
+    else if (targetRole === 'STAFF') identifier = 'STAFF-ELEC-001';
+    else if (targetRole === 'ADMIN') identifier = 'ADMIN-001';
+
+    await login(identifier, 'password123', targetRole);
   };
 
   return (
@@ -118,7 +100,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isLoading,
         login,
-        registerUser,
+        verifyIdentity,
+        register,
         logout,
         quickSwitchRole,
       }}

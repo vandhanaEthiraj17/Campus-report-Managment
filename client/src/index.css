@@ -96,3 +96,13 @@
 .animate-pulse-glow {
   animation: pulse-glow 3s infinite ease-in-out;
 }
+
+/* Sidebar transition & mobile drawer */
+.sidebar-container {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar-container.menu-open,
+.sidebar-container[data-menu-open="true"] {
+  transform: translateX(0) !important;
+}
+

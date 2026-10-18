@@ -8,6 +8,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 export const getAnalyticsOverview = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const totalComplaints = await Complaint.countDocuments();
+    const anonymousCount = await Complaint.countDocuments({ isAnonymous: true });
     const reportedCount = await Complaint.countDocuments({ status: 'Reported' });
     const inProgressCount = await Complaint.countDocuments({ status: { $in: ['Assigned', 'Accepted', 'In Progress'] } });
     const resolvedCount = await Complaint.countDocuments({ status: 'Resolved' });
@@ -72,6 +73,7 @@ export const getAnalyticsOverview = async (req: AuthRequest, res: Response): Pro
     res.status(200).json({
       metrics: {
         totalComplaints,
+        anonymousCount,
         reportedCount,
         inProgressCount,
         resolvedCount,

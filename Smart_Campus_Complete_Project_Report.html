@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Campus Issue Reporting & Management System - Complete Technical & Architectural Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    @page {
+      size: A4;
+      margin: 14mm 14mm 14mm 14mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #0f172a;
+      background-color: #ffffff;
+      line-height: 1.55;
+      font-size: 10.5pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    .page {
+      page-break-after: always;
+      position: relative;
+      padding: 10px 0;
+    }
+
+    .page:last-child {
+      page-break-after: avoid;
+    }
+
+    /* Cover Page */
+    .cover-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 260mm;
+      padding: 35px 30px;
+      background: linear-gradient(145deg, #090d16 0%, #1e1b4b 45%, #0f172a 100%);
+      color: #ffffff;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cover-top {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding-bottom: 25px;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      padding: 5px 14px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(96, 165, 250, 0.4);
+      color: #93c5fd;
+      font-size: 8.5pt;
+      font-weight: 700;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+    }
+
+    .cover-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 30pt;
+      font-weight: 800;
+      margin: 22px 0 10px 0;
+      line-height: 1.15;
+      background: linear-gradient(to right, #ffffff, #60a5fa, #93c5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .cover-subtitle {
+      font-size: 13pt;
+      color: #94a3b8;
+      font-weight: 400;
+      max-width: 650px;
+      margin-bottom: 25px;
+      line-height: 1.5;
+    }
+
+    .cover-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 30px 0;
+    }
+
+    .cover-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      border-radius: 12px;
+    }
+
+    .cover-card-label {
+      font-size: 8pt;
+      color: #64748b;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+    }
+
+    .cover-card-val {
+      font-size: 10.5pt;
+      color: #f1f5f9;
+      font-weight: 600;
+      margin-top: 5px;
+    }
+
+    .cover-footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9pt;
+      color: #64748b;
+    }
+
+    /* Headings */
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+      color: #0f172a;
+      margin-top: 0;
+    }
+
+    h2 {
+      font-size: 16pt;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 6px;
+      margin-top: 24px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #0f172a;
+    }
+
+    h2 .num-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #2563eb;
+      color: #ffffff;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      font-size: 11pt;
+      font-weight: 700;
+    }
+
+    h3 {
+      font-size: 12pt;
+      color: #1e40af;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+
+    h4 {
+      font-size: 10.5pt;
+      color: #334155;
+      margin-top: 12px;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 12px;
+      color: #334155;
+      text-align: justify;
+    }
+
+    ul, ol {
+      margin-top: 4px;
+      margin-bottom: 12px;
+      padding-left: 22px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    /* Callout & Card styles */
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+    }
+
+    .card-accent {
+      border-left: 4px solid #2563eb;
+      background: #f0f7ff;
+    }
+
+    .card-success {
+      border-left: 4px solid #10b981;
+      background: #f0fdf4;
+    }
+
+    .card-purple {
+      border-left: 4px solid #8b5cf6;
+      background: #f5f3ff;
+    }
+
+    .card-amber {
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+    }
+
+    /* Mechanism flow steps */
+    .step-box {
+      display: flex;
+      gap: 12px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      align-items: flex-start;
+    }
+
+    .step-pill {
+      background: #1e293b;
+      color: #ffffff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5pt;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 2px;
+    }
+
+    .step-content {
+      font-size: 9.5pt;
+      color: #1e293b;
+    }
+
+    .step-content strong {
+      color: #0f172a;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 16px;
+      font-size: 9.2pt;
+    }
+
+    th {
+      background: #0f172a;
+      color: #ffffff;
+      text-align: left;
+      padding: 8px 12px;
+      font-weight: 600;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #334155;
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    /* Code tags */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 8.5pt;
+      border: 1px solid #e2e8f0;
+    }
+
+    .badge-tech {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #e0e7ff;
+      color: #3730a3;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8pt;
+      font-weight: 600;
+      margin-right: 4px;
+      margin-bottom: 4px;
+    }
+
+    .badge-role {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .role-admin { background: #fee2e2; color: #991b1b; }
+    .role-faculty { background: #e0e7ff; color: #3730a3; }
+    .role-student { background: #dcfce7; color: #166534; }
+    .role-staff { background: #fef3c7; color: #92400e; }
+
+    .footer-note {
+      text-align: center;
+      font-size: 8.5pt;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 10px;
+      margin-top: 25px;
+    }
+
+    .print-bar {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .print-btn {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 10pt;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .print-btn:hover {
+      background: #1d4ed8;
+    }
+
+    @media print {
+      .print-bar {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Screen Only Print Header -->
+  <div class="print-bar">
+    <div>
+      <span style="font-weight: 700; font-family: Outfit;">Smart Campus Report Management System</span>
+      <span style="color: #94a3b8; font-size: 9pt; margin-left: 10px;">Module-by-Module Technical Specification</span>
+    </div>
+    <button class="print-btn" onclick="window.print()">
+      🖨️ Print / Save as PDF
+    </button>
+  </div>
+
+  <!-- ==================== COVER PAGE ==================== -->
+  <div class="page">
+    <div class="cover-container">
+      <div class="cover-top">
+        <span class="badge-pill">Technical Architecture & Project Report</span>
+        <h1 class="cover-title">Smart Campus Issue Reporting & Maintenance Management Platform</h1>
+        <p class="cover-subtitle">
+          Comprehensive Module-by-Module Breakdown: Operational Workflows, Internal Mechanisms, Software Architecture, and Technology Stacks.
+        </p>
+      </div>
+
+      <div class="cover-grid">
+        <div class="cover-card">
+          <div class="cover-card-label">Core Architecture</div>
+          <div class="cover-card-val">Client-Server REST SPA (Micro-Service Ready)</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-label">Frontend Engineering</div>
+          <div class="cover-card-val">React 19, TypeScript, Vite 8, Tailwind CSS v4</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-label">Backend Engineering</div>
+          <div class="cover-card-val">Node.js, Express, TypeScript, TSX Watch</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-label">Data Persistence</div>
+          <div class="cover-card-val">MongoDB 8.0+, Mongoose ODM Schema Modeling</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-label">Security & Authentication</div>
+          <div class="cover-card-val">Institutional Dataset Verification, JWT (7d), BcryptJS</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-label">Automated Workflows</div>
+          <div class="cover-card-val">Real-time Duplicate Prevention & 10-Min SLA Cron Engine</div>
+        </div>
+      </div>
+
+      <div class="cover-footer">
+        <div>Project: Campus Issue Reporting & Resolution System</div>
+        <div>Institution: Adhiyamaan College of Engineering</div>
+        <div>Date: October 2026</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SECTION 1: ARCHITECTURAL OVERVIEW ==================== -->
+  <div class="page">
+    <h2><span class="num-badge">1</span> High-Level System Architecture & Topology</h2>
+    <p>
+      The <strong>Smart Campus Issue Reporting & Maintenance Management Platform</strong> is engineered to eliminate traditional campus maintenance delays, paper-based slips, and uncoordinated facility repairs. It connects four distinct institutional stakeholders (<strong>Students</strong>, <strong>Faculty</strong>, <strong>Maintenance Technicians</strong>, and <strong>Campus Administrators</strong>) through a unified, reactive digital portal.
+    </p>
+
+    <div class="card card-accent">
+      <h3 style="margin-top: 0;">Multi-Tier Component Topology</h3>
+      <p style="font-size: 9.5pt; margin-bottom: 8px;">
+        The system follows a modern decoupled 3-Tier Web Architecture:
+      </p>
+      <div class="step-box">
+        <div class="step-pill">TIER 1 : CLIENT</div>
+        <div class="step-content">
+          <strong>Presentation Layer (React 19 SPA):</strong> Hosted via Vite on port 3000. Features role-driven reactive dashboards, contextual modals, live camera video capture, multi-format file uploads, Web Speech API speech-to-text voice input, and confetti completion triggers.
+        </div>
+      </div>
+      <div class="step-box">
+        <div class="step-pill">TIER 2 : SERVER</div>
+        <div class="step-content">
+          <strong>Application / API Gateway (Node.js & Express):</strong> Runs on port 5000 with CORS, JSON body parsers, disk storage Multer engine, JWT authorization filters, database-level RBAC role validators, and an automated background SLA escalation scheduler.
+        </div>
+      </div>
+      <div class="step-box">
+        <div class="step-pill">TIER 3 : DATABASE</div>
+        <div class="step-content">
+          <strong>Data Persistence Layer (MongoDB & Mongoose):</strong> Structured document collections including Users, Approved Campus Members (Excel dataset), Locations, Categories, Departments, Complaints with embedded lifecycle timelines, and immutable Administrative Audit Logs.
+        </div>
+      </div>
+    </div>
+
+    <h3>Institutional Role-Based Access Control (RBAC) Matrix</h3>
+    <p>Every API route is secured at the server level by verifying the caller's true database record, ignoring any client-side claims.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>User Role</th>
+          <th>Identity Identifier</th>
+          <th>Account Creation Route</th>
+          <th>Authorized Capabilities & Permitted Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge-role role-student">Student</span></td>
+          <td>Register Number (e.g. <code>6176AC21UCS143</code>)</td>
+          <td>Public Identity Verification against College Excel records</td>
+          <td>Report campus issues, view own tickets, community upvote recurring faults, track repair timelines, review resolved repairs with 1-5 star ratings.</td>
+        </tr>
+        <tr>
+          <td><span class="badge-role role-faculty">Faculty</span></td>
+          <td>Faculty ID (e.g. <code>FAC-CSE-001</code>)</td>
+          <td>Public Verification against College Excel or Admin Provisioned</td>
+          <td>Priority classroom & lab issue reporting, department ticket tracking, resolution verification.</td>
+        </tr>
+        <tr>
+          <td><span class="badge-role role-staff">Staff (Technician)</span></td>
+          <td>Staff ID / Email (e.g. <code>STAFF-ELEC-001</code>)</td>
+          <td>Admin Provisioned</td>
+          <td>Department task queue viewing, accept task, start work (In Progress), upload mandatory post-repair proof photo (<code>afterImages</code>), submit completion notes.</td>
+        </tr>
+        <tr>
+          <td><span class="badge-role role-admin">Admin</span></td>
+          <td>Admin ID / Email (e.g. <code>admin@campus.edu</code>)</td>
+          <td>System Seed / Master Admin</td>
+          <td>Master complaint dispatch center, technician assignment, priority escalation, user management (activate/deactivate), faculty/staff provisioning, system audit logs, SLA breach monitoring.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 2: MODULE-BY-MODULE DETAILED BREAKDOWN ==================== -->
+  <div class="page">
+    <h2><span class="num-badge">2</span> Module 1: Authentication & Institutional Identity Verification</h2>
+    
+    <div class="card card-purple">
+      <h3 style="margin-top: 0;">Module Objective & Overview</h3>
+      <p style="font-size: 9.5pt;">
+        Prevents unauthorized public spam, spoofed identities, or malicious account creation by strictly verifying every user against an authorized institutional dataset before granting access to create an account.
+      </p>
+    </div>
+
+    <h4>1. Technologies & Libraries Employed</h4>
+    <div style="margin-bottom: 12px;">
+      <span class="badge-tech">XLSX (SheetJS)</span>
+      <span class="badge-tech">BcryptJS (10 Salt Rounds)</span>
+      <span class="badge-tech">JSON Web Tokens (JWT)</span>
+      <span class="badge-tech">Mongoose ODM</span>
+      <span class="badge-tech">React Context API</span>
+    </div>
+
+    <h4>2. Operational Mechanism & Step-by-Step Flow</h4>
+    <div class="step-box">
+      <div class="step-pill">STEP 1</div>
+      <div class="step-content">
+        <strong>Excel Dataset Ingestion:</strong> The backend script (<code>importCampusData.ts</code>) parses the college's official roster (<code>smart_campus_login_dataset.xlsx</code>) using <code>xlsx.readFile()</code>, extracting Register Numbers, Names, Departments, Batches, and Dates of Birth (DOB) into the <code>ApprovedCampusMember</code> MongoDB collection.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">STEP 2</div>
+      <div class="step-content">
+        <strong>Two-Factor Identity Verification (<code>POST /api/v1/auth/verify-identity</code>):</strong> When a student or faculty registers, they submit their Register Number/Faculty ID, DOB, and Role. The server normalizes the date via <code>formatDob()</code> (handling SSF serial date codes, YYYY-MM-DD, and DD-MM-YYYY formats) and matches it against the approved collection.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">STEP 3</div>
+      <div class="step-content">
+        <strong>Secure Account Creation (<code>POST /api/v1/auth/register</code>):</strong> Once verified, the user chooses their personal password. The server hashes the password with <code>bcrypt.genSalt(10)</code> and <code>bcrypt.hash()</code>, creates the permanent <code>User</code> record, flags <code>accountCreated = true</code> on the roster, and returns a signed JWT.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">STEP 4</div>
+      <div class="step-content">
+        <strong>Multi-Identifier Login (<code>POST /api/v1/auth/login</code>):</strong> Users can log in using either their Register Number, Faculty ID, or Email. The server compares hashes via <code>bcrypt.compare()</code>, checks account active status (<code>isActive: true</code>), and generates a 7-day signed JWT containing user claims.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">STEP 5</div>
+      <div class="step-content">
+        <strong>Server-Side RBAC Guard (<code>authMiddleware.ts</code>):</strong> The <code>authenticateToken</code> middleware validates the JWT header (<code>Bearer &lt;token&gt;</code>) using <code>jwt.verify()</code>. Crucially, it queries MongoDB directly (<code>User.findById()</code>) on every request to verify the user's live role and active status, mitigating token tampering attacks.
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 2: COMPLAINT REPORTING & MULTIMODAL SUBMISSION -->
+  <div class="page">
+    <h2><span class="num-badge">3</span> Module 2: Complaint Reporting & Multimodal Evidence Submission</h2>
+
+    <div class="card card-accent">
+      <h3 style="margin-top: 0;">Module Objective & Overview</h3>
+      <p style="font-size: 9.5pt;">
+        Enables campus stakeholders to file rich, highly descriptive issue reports within 30 seconds, capturing accurate location data, image/video proof, real-time voice speech, and automated duplicate prevention.
+      </p>
+    </div>
+
+    <h4>1. Technologies & Libraries Employed</h4>
+    <div style="margin-bottom: 12px;">
+      <span class="badge-tech">HTML5 MediaDevices API</span>
+      <span class="badge-tech">Web Speech Recognition API</span>
+      <span class="badge-tech">Multer Multipart Storage</span>
+      <span class="badge-tech">Lucide React Icons</span>
+      <span class="badge-tech">Canvas Confetti</span>
+    </div>
+
+    <h4>2. Operational Mechanism & Key Features</h4>
+    <div class="step-box">
+      <div class="step-pill">FEATURE A</div>
+      <div class="step-content">
+        <strong>Hierarchical Location Selection:</strong> Pre-structured campus topology (<code>PREDEFINED_LOCATIONS</code>) maps Building Blocks (Main, MBA, Arch, Civil, Canteen, Library) &rarr; Floors (1st to 4th) &rarr; Specific Rooms, Computer Labs, Studios, or Restrooms.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">FEATURE B</div>
+      <div class="step-content">
+        <strong>Real-Time Duplicate Issue Detection:</strong> As soon as a user selects Building + Floor + Room, the client triggers <code>GET /api/v1/complaints/check-duplicate</code>. The server queries active tickets (excluding Closed/Verified) at that exact coordinate. If an issue is already open, the user is alerted and can simply <em>Upvote</em> the ticket rather than clogging the maintenance queue.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">FEATURE C</div>
+      <div class="step-content">
+        <strong>Multimodal Proof Capture (Live Camera & File Upload):</strong> 
+        <ul>
+          <li><strong>Live Camera Capture:</strong> Invokes <code>navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })</code> to open the user's camera, stream video into a live canvas, and capture instant snapshots.</li>
+          <li><strong>Multer File Upload (<code>POST /complaints/upload</code>):</strong> Handles multipart/form-data with disk storage, generating cryptographically unique filenames (timestamp + random suffix) for image and video formats (JPG, PNG, MP4, MOV up to 50MB).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">FEATURE D</div>
+      <div class="step-content">
+        <strong>Real-Time Speech-to-Text Voice Transcription:</strong> Uses the browser's native <code>webkitSpeechRecognition</code> engine. Users can dictate descriptions hands-free in either <strong>English (en-US)</strong> or <strong>Tamil (ta-IN)</strong>. Live interim transcripts are transcribed into the description box with an active recording duration timer.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">FEATURE E</div>
+      <div class="step-content">
+        <strong>Privacy-Guaranteed Anonymous Reporting:</strong> Users can toggle <code>isAnonymous: true</code>. The server sanitization layer (<code>sanitizeComplaint()</code>) strips the reporter's personal ID, name, and contact details for technician and public views, displaying only <code>"Anonymous Reporter"</code> while allowing the author and admin to view necessary details.
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 3: TICKET LIFECYCLE & SLA ENGINE -->
+  <div class="page">
+    <h2><span class="num-badge">4</span> Module 3: Ticket Lifecycle, SLA Engine & Auto-Escalation</h2>
+
+    <div class="card card-amber">
+      <h3 style="margin-top: 0;">Module Objective & Overview</h3>
+      <p style="font-size: 9.5pt;">
+        Maintains an auditable, rigorous state machine for every ticket from initial submission to final verification, enforcing Service Level Agreements (SLAs) with background cron escalation.
+      </p>
+    </div>
+
+    <h4>1. Technologies & Libraries Employed</h4>
+    <div style="margin-bottom: 12px;">
+      <span class="badge-tech">Node.js setInterval Worker</span>
+      <span class="badge-tech">Mongoose Subdocuments & Timelines</span>
+      <span class="badge-tech">MongoDB Query Operators ($lt, $in)</span>
+    </div>
+
+    <h4>2. Complaint Lifecycle State Machine</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>State / Status</th>
+          <th>Trigger Event</th>
+          <th>Responsible Actor</th>
+          <th>Next Permitted States</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Reported</code></td>
+          <td>Complaint submitted by user</td>
+          <td>Student / Faculty</td>
+          <td><code>Assigned</code></td>
+        </tr>
+        <tr>
+          <td><code>Assigned</code></td>
+          <td>Allocated to Department & Staff</td>
+          <td>Admin</td>
+          <td><code>Accepted</code>, <code>In Progress</code></td>
+        </tr>
+        <tr>
+          <td><code>Accepted</code></td>
+          <td>Technician acknowledges assignment</td>
+          <td>Technician Staff</td>
+          <td><code>In Progress</code></td>
+        </tr>
+        <tr>
+          <td><code>In Progress</code></td>
+          <td>Technician starts repair work on site</td>
+          <td>Technician Staff</td>
+          <td><code>Resolved</code></td>
+        </tr>
+        <tr>
+          <td><code>Resolved</code></td>
+          <td>Technician uploads proof photo & notes</td>
+          <td>Technician Staff</td>
+          <td><code>Closed</code>, <code>In Progress</code> (Re-open)</td>
+        </tr>
+        <tr>
+          <td><code>Closed</code></td>
+          <td>Reporter verifies repair & rates service</td>
+          <td>Original Reporter</td>
+          <td>Terminal State (Final)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>3. SLA Calculation & Automated Background Escalation</h4>
+    <div class="step-box">
+      <div class="step-pill">SLA RULES</div>
+      <div class="step-content">
+        When a ticket is raised, the category configuration determines its SLA target date:
+        <code>slaDueDate = Date.now() + (category.defaultSLAHours * 3600 * 1000)</code>.<br/>
+        Examples: <em>Electrical Hazards: 4 hours</em> | <em>Sanitation: 8 hours</em> | <em>Water Leakage: 12 hours</em> | <em>Civil & Furniture: 48 hours</em>.
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">CRON WORKER</div>
+      <div class="step-content">
+        <strong>Background Escalation Worker (<code>escalationService.ts</code>):</strong> Triggered on server startup and every <strong>10 minutes</strong> via <code>setInterval()</code>:
+        <ol style="margin-top: 4px; margin-bottom: 4px;">
+          <li>Queries: <code>status IN ['Reported', 'Assigned', 'Accepted', 'In Progress'] AND isEscalated == false AND slaDueDate &lt; now</code>.</li>
+          <li>Automatically sets <code>isEscalated = true</code> and bumps priority to <code>Urgent</code>.</li>
+          <li>Appends an automated audit entry to the ticket timeline: <em>"SLA target date breached. Ticket escalated to Urgent priority for immediate management review."</em></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 4 & 5: STAFF & STUDENT VERIFICATION -->
+  <div class="page">
+    <h2><span class="num-badge">5</span> Module 4 & 5: Technician Dispatch & Two-Way Verification Closing Loop</h2>
+
+    <div class="card card-success">
+      <h3 style="margin-top: 0;">Module 4: Technician Execution Portal</h3>
+      <p style="font-size: 9.5pt;">
+        Empowers maintenance workers with a lightweight mobile-friendly interface to manage assigned campus tasks without bureaucratic paperwork.
+      </p>
+      <div class="step-box">
+        <div class="step-pill">KANBAN TABS</div>
+        <div class="step-content">
+          Technicians view tasks filtered by their specific department (Electrical, Plumbing, IT, Civil, Sanitation) segmented into: <strong>Assigned</strong>, <strong>In Progress</strong>, and <strong>Resolved</strong>.
+        </div>
+      </div>
+      <div class="step-box">
+        <div class="step-pill">PROOF OF WORK</div>
+        <div class="step-content">
+          <strong>Mandatory Photographic Evidence (<code>POST /complaints/:id/resolve</code>):</strong> Technicians cannot mark an issue resolved with text alone. The API strictly requires an <code>afterImages</code> array (photographic proof of repair) and resolution notes before transitioning the ticket to <code>Resolved</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-purple">
+      <h3 style="margin-top: 0;">Module 5: Student Verification & Feedback Closing Loop</h3>
+      <p style="font-size: 9.5pt;">
+        Ensures accountability by placing final sign-off power in the hands of the person who reported the problem.
+      </p>
+      <div class="step-box">
+        <div class="step-pill">FLOW A</div>
+        <div class="step-content">
+          <strong>Satisfied & Closed (<code>POST /complaints/:id/verify</code> with <code>isSatisfied: true</code>):</strong> The reporter inspects the before/after photos and on-site fix, awards a 1 to 5 star rating with optional review comments, and closes the ticket. Confetti animations celebrate the successful resolution!
+        </div>
+      </div>
+      <div class="step-box">
+        <div class="step-pill">FLOW B</div>
+        <div class="step-content">
+          <strong>Dissatisfied & Re-opened (<code>isSatisfied: false</code>):</strong> If the issue was improperly repaired, the reporter rejects the resolution. The system immediately rolls the status back to <code>In Progress</code>, notifies technicians with the rejection remarks, and resets the verification state.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 6: ADMIN COMMAND CENTER -->
+  <div class="page">
+    <h2><span class="num-badge">6</span> Module 6: Administrator Command Center & Auditing</h2>
+
+    <div class="card card-accent">
+      <h3 style="margin-top: 0;">Module Objective & Overview</h3>
+      <p style="font-size: 9.5pt;">
+        Provides university executives, estate managers, and maintenance directors with comprehensive operational control, analytics, user provisioning, and compliance auditing.
+      </p>
+    </div>
+
+    <h4>1. Technologies & Libraries Employed</h4>
+    <div style="margin-bottom: 12px;">
+      <span class="badge-tech">MongoDB Aggregation Pipeline ($lookup, $group, $project)</span>
+      <span class="badge-tech">CSV Data Exporter</span>
+      <span class="badge-tech">Immutable AuditLog Schema</span>
+      <span class="badge-tech">Express Role Middleware</span>
+    </div>
+
+    <h4>2. Core Capabilities & Architectural Mechanics</h4>
+    <div class="step-box">
+      <div class="step-pill">ANALYTICS</div>
+      <div class="step-content">
+        <strong>Real-Time KPI Dashboard (<code>GET /admin/analytics/overview</code>):</strong> Aggregates metrics across the campus database using MongoDB Aggregation Pipelines:
+        <ul>
+          <li>Total complaints, active vs resolved ratio, escalated SLA breaches.</li>
+          <li>Category breakdown (pie/bar data grouped by <code>categoryName</code>).</li>
+          <li>Building hotspot breakdown (e.g. Main Block vs Arch Block).</li>
+          <li>Staff workload analytics: calculates active tickets vs total completed per technician using <code>$lookup</code> and <code>$filter</code>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">DISPATCH</div>
+      <div class="step-content">
+        <strong>Master Dispatch Queue & Assignment (<code>PATCH /complaints/:id/assign</code>):</strong> Administrators can re-assign departments, allocate specific technician staff members, and manually override priority levels (e.g. Low to Urgent).
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">USERS</div>
+      <div class="step-content">
+        <strong>User Directory & Privileged Provisioning (<code>GET/POST/PATCH /admin/users</code>):</strong>
+        <ul>
+          <li>Search and filter campus users by role (Student, Faculty, Staff, Admin) and department.</li>
+          <li>Instant activation/deactivation toggle (<code>isActive: true/false</code>) to revoke access.</li>
+          <li>Provision new Faculty and Staff accounts with mandatory institutional domain verification (<code>@adhiyamaan.ac.in</code>).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-box">
+      <div class="step-pill">AUDIT LOG</div>
+      <div class="step-content">
+        <strong>Immutable Compliance Audit Log (<code>AuditLog</code> Collection):</strong>
+        Every sensitive administrative action (<code>ROLE_CHANGE</code>, <code>USER_ACTIVATION</code>, <code>USER_DEACTIVATION</code>, <code>USER_CREATION</code>) records:
+        <code>action</code>, <code>performedBy</code> (Admin ID & Name), <code>targetUser</code>, <code>timestamp</code>, and exact delta parameters in <code>details</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY TABLE & CONCLUSION -->
+  <div class="page">
+    <h2><span class="num-badge">7</span> Technology Stack & Architecture Summary Matrix</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Architectural Layer</th>
+          <th>Technology / Framework</th>
+          <th>Specific Version</th>
+          <th>Primary Role & Responsibilities</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Frontend UI Framework</strong></td>
+          <td>React</td>
+          <td><code>^19.2.7</code></td>
+          <td>Component-driven single page user interface and state management.</td>
+        </tr>
+        <tr>
+          <td><strong>Frontend Build Tool</strong></td>
+          <td>Vite</td>
+          <td><code>^8.1.1</code></td>
+          <td>Lightning-fast development bundler, HMR, and proxy configuration.</td>
+        </tr>
+        <tr>
+          <td><strong>Type System</strong></td>
+          <td>TypeScript</td>
+          <td><code>~6.0.2 / 5.7.2</code></td>
+          <td>Strict compile-time type safety across client and server entities.</td>
+        </tr>
+        <tr>
+          <td><strong>CSS & Styling</strong></td>
+          <td>Tailwind CSS</td>
+          <td><code>^4.3.3</code></td>
+          <td>Modern utility-first styling with modern responsive tokens.</td>
+        </tr>
+        <tr>
+          <td><strong>Iconography</strong></td>
+          <td>Lucide React</td>
+          <td><code>^1.25.0</code></td>
+          <td>Accessible, consistent UI iconography across dashboards.</td>
+        </tr>
+        <tr>
+          <td><strong>HTTP Client</strong></td>
+          <td>Axios</td>
+          <td><code>^1.18.1</code></td>
+          <td>Promise-based HTTP client with Bearer token interceptors.</td>
+        </tr>
+        <tr>
+          <td><strong>Backend Runtime</strong></td>
+          <td>Node.js & Express</td>
+          <td><code>^4.21.2</code></td>
+          <td>REST API routing, middleware chaining, and endpoint handling.</td>
+        </tr>
+        <tr>
+          <td><strong>Database Engine</strong></td>
+          <td>MongoDB (Local/Atlas)</td>
+          <td><code>^8.0+</code></td>
+          <td>Document storage for users, complaints, locations, and audit logs.</td>
+        </tr>
+        <tr>
+          <td><strong>ODM Framework</strong></td>
+          <td>Mongoose</td>
+          <td><code>^8.9.3</code></td>
+          <td>Schema definitions, validation rules, indices, and aggregations.</td>
+        </tr>
+        <tr>
+          <td><strong>Authentication Token</strong></td>
+          <td>JSON Web Token (JWT)</td>
+          <td><code>^9.0.2</code></td>
+          <td>Cryptographically signed stateless authentication tokens.</td>
+        </tr>
+        <tr>
+          <td><strong>Password Security</strong></td>
+          <td>BcryptJS</td>
+          <td><code>^2.4.3</code></td>
+          <td>One-way password salting and hashing (10 rounds).</td>
+        </tr>
+        <tr>
+          <td><strong>File & Media Storage</strong></td>
+          <td>Multer</td>
+          <td><code>^1.4.5-lts.1</code></td>
+          <td>Disk storage handler for multi-format photos and video proof.</td>
+        </tr>
+        <tr>
+          <td><strong>Dataset Parser</strong></td>
+          <td>XLSX (SheetJS)</td>
+          <td><code>^0.18.5</code></td>
+          <td>Parses official campus Excel rosters for student/faculty verification.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card card-success">
+      <h3 style="margin-top: 0;">Conclusion & Viva Summary</h3>
+      <p style="font-size: 9.5pt; margin-bottom: 0;">
+        The <strong>Smart Campus Issue Reporting & Maintenance Management Platform</strong> solves the critical campus facility bottleneck by combining <strong>institutional data verification</strong>, <strong>frictionless multimodal reporting</strong> (photo, video, and Tamil/English voice dictation), <strong>duplicate mitigation</strong>, and an <strong>automated 10-minute SLA breach escalation worker</strong>. With full end-to-end auditability and student sign-off, it transforms campus operations into an accountable, transparent, and modern digital workflow.
+      </p>
+    </div>
+
+    <div class="footer-note">
+      Smart Campus Issue Reporting & Maintenance Management Platform — Comprehensive Technical Report
+    </div>
+  </div>
+
+</body>
+</html>

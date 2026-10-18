@@ -24,17 +24,17 @@ const MainContent: React.FC = () => {
     return <LoginPage />;
   }
 
+  if (user.role === 'STUDENT' || user.role === 'FACULTY') {
+    return <StudentDashboard />;
+  }
+
   return (
     <div className="min-h-screen text-slate-800 flex flex-col">
       <Navbar />
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
         {user.role === 'ADMIN' && <AdminDashboard />}
         {user.role === 'STAFF' && <StaffDashboard />}
-        {(user.role === 'STUDENT' || user.role === 'FACULTY') && <StudentDashboard />}
       </main>
-      <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500 glass-nav">
-        Smart Campus Issue Reporting & Maintenance Management System
-      </footer>
     </div>
   );
 };

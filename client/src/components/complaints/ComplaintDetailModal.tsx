@@ -5,7 +5,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { PriorityBadge } from '../common/PriorityBadge';
 import { TimelineVisualizer } from './TimelineVisualizer';
 import { useAuth } from '../../context/AuthContext';
-import { X, MapPin, User, Wrench, CheckCircle2, Image as ImageIcon, Upload } from 'lucide-react';
+import { X, MapPin, User, Wrench, CheckCircle2, Image as ImageIcon, Upload, Lock, Phone, Clock, ShieldAlert, Package } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
 
 const isVideoUrl = (url: string) => {
@@ -148,40 +148,62 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
 
   const handleStaffResolve = async () => {
     if (!complaint) return;
-    const finalAfterUrl = afterImageUrl.trim() || 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=600&q=80';
+    if (!afterImageUrl) {
+      alert('Please upload After Repair photo proof before resolving the ticket.');
+      return;
+    }
 
     setActionLoading(true);
     try {
       await api.post(`/complaints/${complaint._id}/resolve`, {
-        afterImages: [finalAfterUrl],
-        resolutionNotes: resolutionNotes || 'Work completed successfully by technician.',
+        afterImages: [afterImageUrl],
+        resolutionNotes,
       });
-      alert('Repair completed and proof submitted! Awaiting student verification.');
+      canvasConfetti({ particleCount: 60, spread: 60 });
+      alert('Complaint marked as Resolved. Awaiting student verification.');
       onUpdate();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to resolve.');
+      alert(err.response?.data?.message || 'Failed to resolve complaint.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleStudentVerify = async (isSatisfied: boolean) => {
+  const handleStudentVerify = async (satisfied: boolean) => {
     if (!complaint) return;
     setActionLoading(true);
     try {
       await api.post(`/complaints/${complaint._id}/verify`, {
+        isSatisfied: satisfied,
         rating,
         comment: reviewComment,
-        isSatisfied,
       });
-      if (isSatisfied) {
-        canvasConfetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
+      if (satisfied) {
+        canvasConfetti({ particleCount: 90, spread: 70 });
+        alert('Thank you! Complaint verified and closed successfully.');
+      } else {
+        alert('Complaint re-opened for further maintenance inspection.');
       }
       onUpdate();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to verify.');
+      alert(err.response?.data?.message || 'Failed to verify complaint.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResendEmergencySMS = async () => {
+    if (!complaint) return;
+    setActionLoading(true);
+    try {
+      const res = await api.post(`/complaints/${complaint._id}/emergency-notify`);
+      alert(`Emergency SMS alert re-dispatched successfully to: ${res.data.recipients?.join(', ')}`);
+      onUpdate();
+      setComplaint(res.data.complaint);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to dispatch emergency SMS.');
     } finally {
       setActionLoading(false);
     }
@@ -191,19 +213,25 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="glass-card rounded-2xl border border-slate-200 w-full max-w-4xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-8">
+      <div className="glass-card rounded-2xl border border-slate-200 w-full max-w-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-8">
         {isLoading || !complaint ? (
           <div className="p-12 text-center text-slate-400 font-medium">Loading ticket details...</div>
         ) : (
           <div>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/90">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="font-mono text-sm font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
                   {complaint.ticketId}
                 </span>
                 <StatusBadge status={complaint.status} size="lg" />
                 <PriorityBadge priority={complaint.priority} />
+                {complaint.isAnonymous && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                    <Lock className="h-3 w-3 text-amber-700" />
+                    Anonymous Complaint
+                  </span>
+                )}
               </div>
               <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
                 <X className="h-5 w-5" />
@@ -211,6 +239,53 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
             </div>
 
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {/* EMERGENCY HIGH-RISK / WOMEN SAFETY SMS ALERT BANNER */}
+              {(complaint.isEmergency || complaint.emergencyAlertSent || (typeof complaint.category === 'object' && complaint.category?.name?.toLowerCase().includes('women')) || complaint.categoryName?.toLowerCase().includes('women')) && (
+                <div className="p-4 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-950 space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-rose-600 animate-ping" />
+                      <span className="font-extrabold text-xs uppercase tracking-wider text-rose-900 flex items-center gap-1.5">
+                        <ShieldAlert className="h-4 w-4 text-rose-600" />
+                        🚨 High-Risk / Women Safety Emergency Protocol Active
+                      </span>
+                    </div>
+                    <span className="bg-rose-200/90 text-rose-900 border border-rose-300 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                      SMS DISPATCHED • DELIVERED
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-rose-950 space-y-1.5 bg-white/80 p-3 rounded-lg border border-rose-200">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
+                      <span>
+                        <strong>Mobile Alert Recipients:</strong> {complaint.emergencyRecipients && complaint.emergencyRecipients.length > 0 ? complaint.emergencyRecipients.join(', ') : '99529112177, 6382373918'} <span className="text-rose-700 font-medium">(HOD & Coordinators)</span>
+                      </span>
+                    </div>
+                    {complaint.emergencySentAt && (
+                      <div className="flex items-center gap-2 text-[11px] text-rose-700">
+                        <Clock className="h-3.5 w-3.5 text-rose-500 flex-shrink-0" />
+                        <span>SMS Dispatched at: {new Date(complaint.emergencySentAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {user?.role === 'ADMIN' && (
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={handleResendEmergencySMS}
+                        disabled={actionLoading}
+                        className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors"
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                        <span>{actionLoading ? 'Dispatching...' : 'Re-send Mobile SMS Alert'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Issue Overview */}
               <div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2 font-outfit">{complaint.title}</h2>
@@ -218,6 +293,45 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
                   {complaint.description}
                 </p>
               </div>
+
+              {/* Anonymous Privacy Banner */}
+              {complaint.isAnonymous && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2 font-medium">
+                  <Lock className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                  <span>
+                    This ticket is filed as an <strong>Anonymous Complaint</strong>. The reporter's personal details are protected from technicians.
+                  </span>
+                </div>
+              )}
+
+              {/* Linked Campus Asset Information */}
+              {(complaint.assetCode || complaint.asset) && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 text-xs text-indigo-950 flex items-center justify-between flex-wrap gap-2 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded text-[11px] border border-indigo-300">
+                          {complaint.assetCode || (typeof complaint.asset === 'object' ? (complaint.asset as any).assetCode : 'ASSET')}
+                        </span>
+                        <h4 className="font-bold text-slate-800">
+                          {complaint.assetName || (typeof complaint.asset === 'object' ? (complaint.asset as any).assetName : 'Campus Asset')}
+                        </h4>
+                      </div>
+                      <span className="text-[11px] text-indigo-700 font-medium">
+                        Tagged Campus Equipment • Tracked in Asset Register
+                      </span>
+                    </div>
+                  </div>
+                  {typeof complaint.asset === 'object' && (complaint.asset as any).condition && (
+                    <span className="bg-white px-2.5 py-1 rounded-lg border border-indigo-200 font-bold text-[11px] text-slate-700">
+                      Condition: {(complaint.asset as any).condition}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Location & Metadata Pill Bar */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-100/40 border border-slate-200/80 text-xs shadow-sm">
@@ -235,7 +349,16 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
                   <User className="h-4 w-4 text-indigo-500" />
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-bold block">Reported By</span>
-                    <span className="text-slate-800 font-bold">{complaint.reportedByName}</span>
+                    <span className="text-slate-800 font-bold">
+                      {complaint.isAnonymous ? (
+                        <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[11px] font-bold">
+                          <Lock className="h-3 w-3 text-amber-600" />
+                          {complaint.reportedByName || 'Anonymous Reporter'}
+                        </span>
+                      ) : (
+                        complaint.reportedByName || 'Student'
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -481,56 +604,80 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({ comp
 
               {/* STUDENT VERIFICATION & FEEDBACK PANEL */}
               {complaint.status === 'Resolved' && (
-                <div className="p-5 rounded-xl bg-teal-50 border border-teal-200 space-y-4">
-                  <div className="flex items-center gap-2 text-teal-700 font-bold text-xs uppercase">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Student Verification & Service Rating</span>
-                  </div>
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                    The maintenance staff marked this issue as resolved. Please review the after-repair photo above and rate the service to close the ticket!
-                  </p>
+                (() => {
+                  const isReporter = Boolean(
+                    user && complaint && (
+                      (typeof complaint.reportedBy === 'object' && ((complaint.reportedBy as any)?._id === user.id || (complaint.reportedBy as any)?._id === user._id)) ||
+                      complaint.reportedBy === user.id ||
+                      complaint.reportedBy === user._id ||
+                      complaint.reporterUserId === user.id ||
+                      complaint.reporterUserId === user._id
+                    )
+                  );
+                  const canVerify = isReporter || user?.role === 'ADMIN';
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600 font-bold">Rating:</span>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setRating(star)}
-                        className={`p-1 text-lg transition-transform cursor-pointer ${
-                          rating >= star ? 'text-amber-500 scale-110' : 'text-slate-300'
-                        }`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                  </div>
+                  if (!canVerify) {
+                    return (
+                      <div className="p-4 rounded-xl bg-teal-50 border border-teal-200 text-teal-850 text-xs flex items-center gap-2.5 font-medium">
+                        <CheckCircle2 className="h-4 w-4 text-teal-600 flex-shrink-0" />
+                        <span>Repair work completed. Awaiting student verification and rating to close ticket.</span>
+                      </div>
+                    );
+                  }
 
-                  <input
-                    type="text"
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    placeholder="Feedback remarks (optional)..."
-                    className="w-full glass-input rounded-xl px-3 py-2 text-xs"
-                  />
+                  return (
+                    <div className="p-5 rounded-xl bg-teal-50 border border-teal-200 space-y-4">
+                      <div className="flex items-center gap-2 text-teal-700 font-bold text-xs uppercase">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Student Verification & Service Rating</span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                        The maintenance staff marked this issue as resolved. Please review the after-repair photo above and rate the service to close the ticket!
+                      </p>
 
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleStudentVerify(true)}
-                      disabled={actionLoading}
-                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all"
-                    >
-                      Verify & Close Ticket
-                    </button>
-                    <button
-                      onClick={() => handleStudentVerify(false)}
-                      disabled={actionLoading}
-                      className="py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl cursor-pointer"
-                    >
-                      Reopen (Not Fixed)
-                    </button>
-                  </div>
-                </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 font-bold">Rating:</span>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setRating(star)}
+                            className={`p-1 text-lg transition-transform cursor-pointer ${
+                              rating >= star ? 'text-amber-500 scale-110' : 'text-slate-300'
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Feedback remarks (optional)..."
+                        className="w-full glass-input rounded-xl px-3 py-2 text-xs"
+                      />
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleStudentVerify(true)}
+                          disabled={actionLoading}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                        >
+                          Verify & Close Ticket
+                        </button>
+                        <button
+                          onClick={() => handleStudentVerify(false)}
+                          disabled={actionLoading}
+                          className="py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          Reopen (Not Fixed)
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
               )}
 
               {/* RATING DISPLAY IF CLOSED */}

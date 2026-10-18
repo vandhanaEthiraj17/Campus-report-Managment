@@ -1,3 +1,5 @@
+
+
 import path from 'path';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -7,6 +9,10 @@ import authRoutes from './routes/authRoutes';
 import locationRoutes from './routes/locationRoutes';
 import complaintRoutes from './routes/complaintRoutes';
 import adminRoutes from './routes/adminRoutes';
+import assetRoutes from './routes/assetRoutes';
+import maintenanceRoutes from './routes/maintenanceRoutes';
+import intelligenceRoutes from './routes/intelligenceRoutes';
+import sustainabilityRoutes from './routes/sustainabilityRoutes';
 
 dotenv.config();
 
@@ -43,6 +49,10 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', locationRoutes);
 app.use('/api/v1/complaints', complaintRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/assets', assetRoutes);
+app.use('/api/v1/maintenance', maintenanceRoutes);
+app.use('/api/v1/intelligence', intelligenceRoutes);
+app.use('/api/v1/sustainability', sustainabilityRoutes);
 
 // 404 Route Handler
 app.use((req: Request, res: Response) => {
@@ -58,14 +68,27 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 import { checkAndEscalateComplaints } from './services/escalationService';
+import { checkAndProcessMaintenance } from './services/maintenanceSchedulerService';
+import { ensureEmergencySetup } from './utils/ensureEmergencySetup';
+import { ensureAssetSetup } from './utils/ensureAssetSetup';
 
 // Start Server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`[Server] Smart Campus Backend running on http://localhost:${PORT}`);
   
+  // Ensure Emergency categories and departments are configured
+  await ensureEmergencySetup();
+
+  // Ensure Initial Campus Assets are seeded
+  await ensureAssetSetup();
+
   // Run SLA Escalation check on startup and every 10 minutes
   checkAndEscalateComplaints();
   setInterval(checkAndEscalateComplaints, 10 * 60 * 1000);
+
+  // Run Preventive Maintenance Scheduler on startup and every 15 minutes
+  checkAndProcessMaintenance();
+  setInterval(checkAndProcessMaintenance, 15 * 60 * 1000);
 });
 
 export default app;

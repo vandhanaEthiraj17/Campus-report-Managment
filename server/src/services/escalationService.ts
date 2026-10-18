@@ -21,6 +21,27 @@ export const checkAndEscalateComplaints = async (): Promise<{ escalatedCount: nu
         timestamp: new Date(),
         remarks: 'SLA target date breached. Ticket escalated to Urgent priority for immediate management review.',
       });
+
+      // If high risk or emergency, notify HOD & Coordinators via SMS
+      if (!complaint.emergencyAlertSent) {
+        try {
+          const { dispatchEmergencyAlert } = await import('./emergencyNotificationService');
+          const alertResult = await dispatchEmergencyAlert(complaint);
+          complaint.isEmergency = true;
+          complaint.emergencyAlertSent = true;
+          complaint.emergencyRecipients = alertResult.recipients;
+          complaint.emergencySentAt = new Date();
+          complaint.timeline.push({
+            status: 'Escalated',
+            updatedByName: 'Emergency Mobile SMS Gateway',
+            timestamp: new Date(),
+            remarks: `🚨 SLA BREACH EMERGENCY SMS: Alert dispatched to HOD & Coordinators (${alertResult.recipients.join(', ')})`,
+          });
+        } catch (smsErr) {
+          console.error('Failed to dispatch escalation SMS:', smsErr);
+        }
+      }
+
       await complaint.save();
       count++;
     }

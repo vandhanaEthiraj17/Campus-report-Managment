@@ -2,7 +2,7 @@ import React from 'react';
 import type { IComplaint } from '../../types/index';
 import { StatusBadge } from '../common/StatusBadge';
 import { PriorityBadge } from '../common/PriorityBadge';
-import { MapPin, ThumbsUp, ArrowRight, User } from 'lucide-react';
+import { MapPin, ThumbsUp, ArrowRight, User, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const isVideoUrl = (url: string) => {
@@ -27,13 +27,25 @@ export const ComplaintCard: React.FC<ComplaintCardProps> = ({ complaint, onSelec
       className="glass-card glass-card-hover rounded-xl p-5 cursor-pointer flex flex-col justify-between group"
     >
       <div>
-        {/* Top Header: Ticket ID & Status */}
+        {/* Top Header: Ticket ID, Priority & Status */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
               {complaint.ticketId}
             </span>
             <PriorityBadge priority={complaint.priority} />
+            {(complaint.isEmergency || complaint.emergencyAlertSent || (typeof complaint.category === 'object' && complaint.category?.name?.toLowerCase().includes('women')) || complaint.categoryName?.toLowerCase().includes('women')) && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full shadow-2xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-ping inline-block" />
+                🚨 SOS / SMS SENT
+              </span>
+            )}
+            {complaint.isAnonymous && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full shadow-2xs">
+                <Lock className="h-2.5 w-2.5 text-amber-700" />
+                Anonymous
+              </span>
+            )}
           </div>
           <StatusBadge status={complaint.status} />
         </div>
@@ -81,8 +93,17 @@ export const ComplaintCard: React.FC<ComplaintCardProps> = ({ complaint, onSelec
             </div>
 
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-              <User className="h-3 w-3 text-indigo-500" />
-              <span>Reported by {complaint.reportedByName || 'Student'}</span>
+              {complaint.isAnonymous ? (
+                <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                  <Lock className="h-2.5 w-2.5 text-amber-600" />
+                  {complaint.reportedByName || 'Anonymous Reporter'}
+                </span>
+              ) : (
+                <>
+                  <User className="h-3 w-3 text-indigo-500" />
+                  <span>Reported by {complaint.reportedByName || 'Student'}</span>
+                </>
+              )}
             </div>
 
             {complaint.assignedDepartment && (

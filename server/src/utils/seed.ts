@@ -6,6 +6,7 @@ import { Location } from '../models/Location';
 import { Category } from '../models/Category';
 import { Department } from '../models/Department';
 import { Complaint } from '../models/Complaint';
+import { importCampusData } from './importCampusData';
 
 dotenv.config();
 
@@ -16,7 +17,10 @@ const seedData = async () => {
     console.log('[Seed] Connecting to database...');
     await mongoose.connect(mongoURI);
 
-    console.log('[Seed] Clearing existing collections...');
+    console.log('[Seed] Importing Excel campus identity dataset...');
+    await importCampusData();
+
+    console.log('[Seed] Clearing existing User and application data...');
     await User.deleteMany({});
     await Location.deleteMany({});
     await Category.deleteMany({});
@@ -24,17 +28,19 @@ const seedData = async () => {
     await Complaint.deleteMany({});
 
     console.log('[Seed] Seeding Departments...');
-    const departments = await Department.create([
+    await Department.create([
       { name: 'Electrical Maintenance', code: 'ELEC', headName: 'Prof. R. K. Sharma', contactPhone: '+91 9876543210' },
       { name: 'Plumbing Unit', code: 'PLUMB', headName: 'Mr. Suresh Kumar', contactPhone: '+91 9876543211' },
       { name: 'Sanitation Team', code: 'SAN', headName: 'Ms. Anita Roy', contactPhone: '+91 9876543212' },
       { name: 'Civil & Furniture', code: 'CIVIL', headName: 'Er. V. Patel', contactPhone: '+91 9876543213' },
       { name: 'IT & Multimedia Support', code: 'IT', headName: 'Mr. David Miller', contactPhone: '+91 9876543214' },
       { name: 'HVAC Services', code: 'HVAC', headName: 'Mr. A. Khan', contactPhone: '+91 9876543215' },
+      { name: 'Security & Women Safety Cell', code: 'SEC-WSC', headName: 'Dr. K. Meenakshi (Women Safety Coordinator & HOD)', contactPhone: '+91 99529112177' },
     ]);
 
     console.log('[Seed] Seeding Categories...');
     const categories = await Category.create([
+      { name: 'Women Safety & SOS', description: 'Harassment, stalking, distress, or immediate female student safety assistance', icon: 'ShieldAlert', defaultDepartment: 'Security & Women Safety Cell', defaultSLAHours: 1 },
       { name: 'Broken Lights', description: 'Flickering or damaged ceiling lights', icon: 'Zap', defaultDepartment: 'Electrical Maintenance', defaultSLAHours: 24 },
       { name: 'Fan Issues', description: 'Ceiling fans not spinning or producing loud noise', icon: 'Fan', defaultDepartment: 'Electrical Maintenance', defaultSLAHours: 24 },
       { name: 'Water Leakage', description: 'Pipe leakages or overflowing taps', icon: 'Droplets', defaultDepartment: 'Plumbing Unit', defaultSLAHours: 12 },
@@ -46,6 +52,7 @@ const seedData = async () => {
       { name: 'WiFi & Network', description: 'No internet access or slow WiFi access points', icon: 'Wifi', defaultDepartment: 'IT & Multimedia Support', defaultSLAHours: 12 },
       { name: 'Electrical Hazards', description: 'Exposed wires or burning smell from socket', icon: 'AlertTriangle', defaultDepartment: 'Electrical Maintenance', defaultSLAHours: 4 },
       { name: 'Safety Hazards', description: 'Slippery floor, broken glass, or fire hazard', icon: 'ShieldAlert', defaultDepartment: 'Civil & Furniture', defaultSLAHours: 4 },
+      { name: 'Others', description: 'Miscellaneous campus or facility issues', icon: 'HelpCircle', defaultDepartment: 'Civil & Furniture', defaultSLAHours: 24 },
     ]);
 
     console.log('[Seed] Seeding Locations...');
@@ -64,77 +71,112 @@ const seedData = async () => {
       { buildingName: 'Library Block', floor: '1st Floor', roomNumber: 'Digital Reading Room' },
     ]);
 
-    console.log('[Seed] Seeding Demo Accounts...');
+    console.log('[Seed] Seeding Default User Accounts...');
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash('password123', salt);
 
     const student = await User.create({
-      name: 'Alex Johnson (Student)',
-      email: 'student@campus.edu',
+      name: 'SURYA NARAYANAN K',
+      identifier: '6176AC21UCS143',
+      registerNumber: '6176AC21UCS143',
+      email: '6176ac21ucs143@campus.edu',
       passwordHash,
       role: 'STUDENT',
-      department: 'Computer Science',
+      department: 'CSE',
       phone: '+91 9123456789',
-      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
+      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Surya',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
+    });
+
+    const vandhanaStudent = await User.create({
+      name: 'Vandhana Ethiraj',
+      identifier: '6176AC21UCS170',
+      registerNumber: '6176AC21UCS170',
+      email: 'vandhana@adhiyamaan.ac.in',
+      passwordHash,
+      role: 'STUDENT',
+      department: 'CSE',
+      phone: '+91 9876543219',
+      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Vandhana',
+      isActive: true,
+      isEmailVerified: true,
+      isVerified: true,
     });
 
     const faculty = await User.create({
-      name: 'Dr. Sarah Connor (Faculty)',
-      email: 'faculty@campus.edu',
+      name: 'Dr. Arun Kumar',
+      identifier: 'FAC-CSE-001',
+      facultyId: 'FAC-CSE-001',
+      email: 'fac-cse-001@campus.edu',
       passwordHash,
       role: 'FACULTY',
-      department: 'Electrical Engineering',
+      department: 'CSE',
       phone: '+91 9123456790',
-      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
+      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Arun',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
     });
 
     const admin = await User.create({
       name: 'Chief Admin (Campus Director)',
+      identifier: 'ADMIN-001',
       email: 'admin@campus.edu',
       passwordHash,
       role: 'ADMIN',
       department: 'Estate Management',
       phone: '+91 9123456791',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
     });
 
     const elecStaff = await User.create({
       name: 'Robert Miles (Elec Technician)',
+      identifier: 'STAFF-ELEC-001',
       email: 'elec.staff@campus.edu',
       passwordHash,
       role: 'STAFF',
       department: 'Electrical Maintenance',
       phone: '+91 9123456792',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Robert',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
     });
 
     const plumbStaff = await User.create({
       name: 'Michael Scott (Plumbing Supervisor)',
+      identifier: 'STAFF-PLUMB-001',
       email: 'plumb.staff@campus.edu',
       passwordHash,
       role: 'STAFF',
       department: 'Plumbing Unit',
       phone: '+91 9123456793',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
     });
 
     const itStaff = await User.create({
       name: 'David Chen (IT Specialist)',
+      identifier: 'STAFF-IT-001',
       email: 'it.staff@campus.edu',
       passwordHash,
       role: 'STAFF',
       department: 'IT & Multimedia Support',
       phone: '+91 9123456794',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=David',
+      isActive: true,
       isEmailVerified: true,
+      isVerified: true,
     });
 
-    console.log('[Seed] Seeding Initial Demo Complaints...');
+    console.log('[Seed] Seeding Initial Complaints...');
 
     // Complaint 1: In Progress
     const projCategory = categories.find((c) => c.name.includes('Projector')) || categories[0];
@@ -173,7 +215,7 @@ const seedData = async () => {
       ],
     });
 
-    // Complaint 2: Resolved (Needs verification)
+    // Complaint 2: Resolved
     const leakCategory = categories.find((c) => c.name.includes('Water')) || categories[0];
     const washroomLoc = locations.find((l) => l.roomNumber.includes('Washroom')) || locations[0];
     const sla2 = new Date();
@@ -207,50 +249,14 @@ const seedData = async () => {
       slaDueDate: sla2,
       status: 'Resolved',
       timeline: [
-        { status: 'Reported', updatedBy: student._id, updatedByName: student.name, timestamp: new Date(Date.now() - 3600000 * 8), remarks: 'Reported by Alex Johnson' },
+        { status: 'Reported', updatedBy: student._id, updatedByName: student.name, timestamp: new Date(Date.now() - 3600000 * 8), remarks: 'Reported by Student' },
         { status: 'Assigned', updatedBy: admin._id, updatedByName: admin.name, timestamp: new Date(Date.now() - 3600000 * 6), remarks: 'Assigned to Plumbing Unit' },
         { status: 'In Progress', updatedBy: plumbStaff._id, updatedByName: plumbStaff.name, timestamp: new Date(Date.now() - 3600000 * 4), remarks: 'Technician on site with spare parts' },
         { status: 'Resolved', updatedBy: plumbStaff._id, updatedByName: plumbStaff.name, timestamp: new Date(Date.now() - 3600000 * 1), remarks: 'Repair complete with proof photo attached' },
       ],
     });
 
-    // Complaint 3: Reported (Unassigned)
-    const fanCategory = categories.find((c) => c.name.includes('Fan')) || categories[0];
-    const room101 = locations.find((l) => l.roomNumber === 'Room 101') || locations[0];
-
-    await Complaint.create({
-      ticketId: 'CMP-2026-1003',
-      title: 'Ceiling Fan #3 making loud grinding sound',
-      description: 'The ceiling fan near the rear whiteboard in Room 101 makes an unsafe screeching noise when turned above speed 2.',
-      category: fanCategory._id,
-      categoryName: fanCategory.name,
-      location: room101._id,
-      locationDetails: {
-        buildingName: room101.buildingName,
-        floor: room101.floor,
-        roomNumber: room101.roomNumber,
-      },
-      reportedBy: student._id,
-      reportedByName: student.name,
-      priority: 'Medium',
-      assignedDepartment: 'Electrical Maintenance',
-      beforeImages: [
-        'https://images.unsplash.com/photo-1618961734760-466979ce35b0?auto=format&fit=crop&w=600&q=80',
-      ],
-      status: 'Reported',
-      timeline: [
-        { status: 'Reported', updatedBy: student._id, updatedByName: student.name, timestamp: new Date(), remarks: 'Complaint submitted' },
-      ],
-    });
-
     console.log('[Seed] Database seeded successfully!');
-    console.log('\n--- DEMO USER CREDENTIALS ---');
-    console.log('Student Account:     student@campus.edu  / password123');
-    console.log('Faculty Account:     faculty@campus.edu  / password123');
-    console.log('Admin Account:       admin@campus.edu    / password123');
-    console.log('Elec Staff Account:  elec.staff@campus.edu / password123');
-    console.log('Plumb Staff Account: plumb.staff@campus.edu / password123');
-    console.log('IT Staff Account:    it.staff@campus.edu / password123');
     process.exit(0);
   } catch (error) {
     console.error('[Seed] Error during seeding:', error);
