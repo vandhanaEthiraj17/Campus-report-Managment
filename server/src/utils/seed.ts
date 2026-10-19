@@ -217,7 +217,7 @@ const seedData = async () => {
 
     // Complaint 2: Resolved
     const leakCategory = categories.find((c) => c.name.includes('Water')) || categories[0];
-    const washroomLoc = locations.find((l) => l.roomNumber.includes('Washroom')) || locations[0];
+    const washroomLoc = locations.find((l) => l.roomNumber?.includes('Washroom')) || locations[0];
     const sla2 = new Date();
     sla2.setHours(sla2.getHours() + 6);
 

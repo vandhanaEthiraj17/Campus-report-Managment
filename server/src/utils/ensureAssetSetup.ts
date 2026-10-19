@@ -5,6 +5,11 @@ import { User } from '../models/User';
 
 export const ensureAssetSetup = async (): Promise<void> => {
   try {
+    // In production environments, never auto-seed demo records into the live database
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+
     const assetCount = await Asset.countDocuments();
     if (assetCount > 0) {
       return;

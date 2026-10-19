@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../../services/api';
-import type { ICategory, IComplaint, IAsset } from '../../types/index';
+import type { ICategory, IComplaint } from '../../types/index';
 import { 
-  X, MapPin, Upload, AlertCircle, ThumbsUp, Check, Zap, Fan, 
-  Droplets, Bath, Trash2, Armchair, DoorClosed, Tv, Wifi, 
-  AlertTriangle, ShieldAlert, Camera, HelpCircle,
-  ShieldCheck, Package
+  X, MapPin, Upload, AlertCircle, Check, Zap, Fan, 
+  Droplets, Bath, Trash2, Armchair, Tv, Wifi, 
+  AlertTriangle, ShieldAlert, Camera, HelpCircle, Utensils, 
+  Building2, Bus, Car, Home, Footprints, Trophy, FlaskConical,
+  ShieldCheck
 } from 'lucide-react';
 import canvasConfetti from 'canvas-confetti';
 
@@ -60,6 +61,40 @@ const PREDEFINED_LOCATIONS: Record<string, Record<string, string[]>> = {
   }
 };
 
+// 14 strict Building / Room category configurations as required
+const BUILDING_CATEGORY_RULES: Array<{
+  displayName: string;
+  match: RegExp;
+  fallbackMatch?: RegExp;
+  defaultSLA: number;
+  icon: string;
+  isSOS?: boolean;
+}> = [
+  { displayName: 'Broken Benches & Desks', match: /bench|desk/i, defaultSLA: 48, icon: 'Armchair' },
+  { displayName: 'Broken Lights', match: /light/i, fallbackMatch: /light/i, defaultSLA: 24, icon: 'Zap' },
+  { displayName: 'Canteen & Food Quality', match: /canteen & food|food quality/i, fallbackMatch: /food|canteen/i, defaultSLA: 8, icon: 'Utensils' },
+  { displayName: 'Civil Maintenance & Classroom Damage', match: /civil maintenance & classroom|classroom damage/i, fallbackMatch: /civil|classroom/i, defaultSLA: 24, icon: 'Building2' },
+  { displayName: 'Cleaning & Sanitation', match: /cleaning & sanitation/i, fallbackMatch: /clean|sanitation|garbage/i, defaultSLA: 8, icon: 'Trash2' },
+  { displayName: 'Electrical', match: /^electrical$/i, fallbackMatch: /electrical/i, defaultSLA: 24, icon: 'Zap' },
+  { displayName: 'Electrical Hazards', match: /electrical hazard/i, fallbackMatch: /hazard/i, defaultSLA: 4, icon: 'AlertTriangle' },
+  { displayName: 'Emergency & Safety Incidents', match: /emergency & safety incidents/i, fallbackMatch: /emergency/i, defaultSLA: 1, icon: 'ShieldAlert', isSOS: true },
+  { displayName: 'Fan Issues', match: /fan/i, defaultSLA: 24, icon: 'Fan' },
+  { displayName: 'Networking / Internet', match: /wifi & network|it & campus networking|internet \/ wi-fi/i, fallbackMatch: /wifi|network|internet/i, defaultSLA: 8, icon: 'Wifi' },
+  { displayName: 'Plumbing & Water Supply', match: /plumbing & water supply/i, fallbackMatch: /plumbing|water/i, defaultSLA: 12, icon: 'Droplets' },
+  { displayName: 'Projector & AV Issues', match: /projector & av/i, fallbackMatch: /projector|av/i, defaultSLA: 12, icon: 'Tv' },
+  { displayName: 'Washroom Issues', match: /washroom/i, fallbackMatch: /toilet|restroom/i, defaultSLA: 12, icon: 'Bath' },
+  { displayName: 'Other', match: /^others?$|^other$/i, fallbackMatch: /other/i, defaultSLA: 24, icon: 'HelpCircle' },
+];
+
+interface DisplayCategory {
+  _id: string;
+  name: string;
+  originalName: string;
+  defaultSLAHours: number;
+  subcategories: string[];
+  isSOS?: boolean;
+}
+
 interface NewComplaintModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,12 +103,17 @@ interface NewComplaintModalProps {
 
 export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [categories, setCategories] = useState<ICategory[]>([]);
+  const [campusLocations, setCampusLocations] = useState<any[]>([]);
 
   // Form State
+  const [locationMode, setLocationMode] = useState<'BUILDING' | 'CAMPUS_ZONE'>('BUILDING');
+  const [selectedLocationId, setSelectedLocationId] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [floor, setFloor] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+  const [incidentTimestamp, setIncidentTimestamp] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
@@ -81,11 +121,6 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
   
   // Anonymous Reporting State
   const [isAnonymous, setIsAnonymous] = useState(false);
-
-  // Campus Asset Linkage State
-  const [availableAssets, setAvailableAssets] = useState<IAsset[]>([]);
-  const [selectedAssetId, setSelectedAssetId] = useState('');
-  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
 
   // Camera State & Refs
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -113,12 +148,15 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play().catch((e) => console.error('Camera play error', e));
         }
       }, 100);
     } catch (err: any) {
-      console.warn('Direct webcam stream unavailable, prompting device camera input', err);
-      mobileCameraInputRef.current?.click();
+      console.warn('Native getUserMedia failed, falling back to mobile camera input', err);
+      if (mobileCameraInputRef.current) {
+        mobileCameraInputRef.current.click();
+      } else {
+        setErrorMsg('Camera access unavailable. Please use the file upload option.');
+      }
     }
   };
 
@@ -132,46 +170,37 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
-    const video = videoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        setIsUploading(true);
+        const formData = new FormData();
+        const photoFile = new File([blob], `live_photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        formData.append('image', photoFile);
 
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      stopCamera();
-      setIsUploading(true);
-      setErrorMsg('');
-
-      const file = new File([blob], `campus_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-      const formData = new FormData();
-      formData.append('file', file);
-
-      try {
-        const res = await api.post('/complaints/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        if (res.data?.url) {
-          setBeforeImages((prev) => [...prev, res.data.url]);
+        try {
+          const res = await api.post('/complaints/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const url = res.data.imageUrl || res.data.url;
+          if (url) {
+            setBeforeImages((prev) => [...prev, url]);
+          }
+          stopCamera();
+        } catch (err: any) {
+          console.error('Failed to upload captured photo', err);
+          setErrorMsg(err.response?.data?.message || 'Failed to upload captured photo.');
+        } finally {
+          setIsUploading(false);
         }
-      } catch (err: any) {
-        console.error('Captured photo upload error', err);
-        setErrorMsg(err.response?.data?.message || 'Failed to upload camera capture.');
-      } finally {
-        setIsUploading(false);
-      }
-    }, 'image/jpeg', 0.9);
+      }, 'image/jpeg', 0.85);
+    }
   };
-
-  // Cleanup on unmount or close
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -179,18 +208,16 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
     setIsUploading(true);
     setErrorMsg('');
-
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('image', file);
 
     try {
       const res = await api.post('/complaints/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (res.data && res.data.url) {
-        setBeforeImages([...beforeImages, res.data.url]);
+      const url = res.data.imageUrl || res.data.url;
+      if (url) {
+        setBeforeImages((prev) => [...prev, url]);
       }
     } catch (err: any) {
       console.error('File upload failed', err);
@@ -201,50 +228,49 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     }
   };
 
-  // Icon mapping
+  // Modern category icon resolution
   const getCategoryIcon = (name: string) => {
-    if (name.includes('Women') || name.includes('SOS')) return <ShieldAlert className="h-5 w-5 text-rose-600 animate-pulse" />;
-    if (name.includes('Light')) return <Zap className="h-5 w-5 text-amber-400" />;
-    if (name.includes('Fan')) return <Fan className="h-5 w-5 text-blue-400" />;
-    if (name.includes('Water') || name.includes('Leak')) return <Droplets className="h-5 w-5 text-cyan-400" />;
-    if (name.includes('Washroom')) return <Bath className="h-5 w-5 text-teal-400" />;
-    if (name.includes('Garbage')) return <Trash2 className="h-5 w-5 text-emerald-400" />;
-    if (name.includes('Bench')) return <Armchair className="h-5 w-5 text-purple-400" />;
-    if (name.includes('Classroom')) return <DoorClosed className="h-5 w-5 text-indigo-400" />;
-    if (name.includes('Projector')) return <Tv className="h-5 w-5 text-rose-400" />;
-    if (name.includes('WiFi')) return <Wifi className="h-5 w-5 text-sky-400" />;
-    if (name.includes('Electrical')) return <AlertTriangle className="h-5 w-5 text-orange-400" />;
-    if (name.toLowerCase().includes('other')) return <HelpCircle className="h-5 w-5 text-indigo-500" />;
-    return <ShieldAlert className="h-5 w-5 text-red-400" />;
+    const key = name.toLowerCase();
+    if (key.includes('women') || key.includes('sos')) return <ShieldAlert className="h-5 w-5 text-rose-600 animate-pulse" />;
+    if (key.includes('bus') || key.includes('transport')) return <Bus className="h-5 w-5 text-amber-500" />;
+    if (key.includes('park') || key.includes('car') || key.includes('security')) return <Car className="h-5 w-5 text-blue-500" />;
+    if (key.includes('hostel')) return <Home className="h-5 w-5 text-emerald-500" />;
+    if (key.includes('road') || key.includes('subway') || key.includes('path')) return <Footprints className="h-5 w-5 text-orange-500" />;
+    if (key.includes('sport') || key.includes('ground') || key.includes('gym')) return <Trophy className="h-5 w-5 text-yellow-500" />;
+    if (key.includes('lab')) return <FlaskConical className="h-5 w-5 text-purple-500" />;
+    if (key.includes('light')) return <Zap className="h-5 w-5 text-amber-400" />;
+    if (key.includes('fan')) return <Fan className="h-5 w-5 text-blue-400" />;
+    if (key.includes('water') || key.includes('leak') || key.includes('plumb')) return <Droplets className="h-5 w-5 text-cyan-400" />;
+    if (key.includes('washroom') || key.includes('toilet') || key.includes('restroom')) return <Bath className="h-5 w-5 text-teal-400" />;
+    if (key.includes('clean') || key.includes('sanitation') || key.includes('garbage')) return <Trash2 className="h-5 w-5 text-emerald-400" />;
+    if (key.includes('bench') || key.includes('desk')) return <Armchair className="h-5 w-5 text-purple-400" />;
+    if (key.includes('classroom') || key.includes('civil')) return <Building2 className="h-5 w-5 text-indigo-400" />;
+    if (key.includes('canteen') || key.includes('food')) return <Utensils className="h-5 w-5 text-orange-400" />;
+    if (key.includes('projector') || key.includes('av')) return <Tv className="h-5 w-5 text-rose-400" />;
+    if (key.includes('wifi') || key.includes('network') || key.includes('internet')) return <Wifi className="h-5 w-5 text-sky-400" />;
+    if (key.includes('hazard')) return <AlertTriangle className="h-5 w-5 text-rose-500" />;
+    if (key.includes('emergency')) return <ShieldAlert className="h-5 w-5 text-rose-600" />;
+    if (key.includes('electrical')) return <Zap className="h-5 w-5 text-amber-500" />;
+    if (key.includes('other')) return <HelpCircle className="h-5 w-5 text-indigo-500" />;
+    return <AlertCircle className="h-5 w-5 text-slate-400" />;
   };
 
+  // Fetch master data on open
   useEffect(() => {
     if (!isOpen) return;
 
     const fetchMasterData = async () => {
       try {
-        const catRes = await api.get('/categories');
+        const [catRes, locRes] = await Promise.all([
+          api.get('/categories'),
+          api.get('/locations?limit=200').catch(() => ({ data: { success: false, data: { locations: [] } } }))
+        ]);
         const cats: ICategory[] = catRes.data.categories || [];
-        
-        // Ensure Women Safety & SOS is placed prominently first
-        const womenSafetyCats = cats.filter((c) => /women|sos/i.test(c.name));
-        const others = cats.filter((c) => c.name.toLowerCase().includes('other'));
-        const normalCats = cats.filter((c) => !/women|sos/i.test(c.name) && !c.name.toLowerCase().includes('other'));
-        
-        let finalCats = [...womenSafetyCats, ...normalCats];
-        if (others.length > 0) {
-          finalCats.push(...others);
-        } else {
-          finalCats.push({
-            _id: 'others_category',
-            name: 'Others',
-            description: 'Miscellaneous campus issue or other facilities',
-            defaultDepartment: 'Civil & Furniture',
-            defaultSLAHours: 24,
-            icon: 'HelpCircle'
-          } as any);
+        setCategories(cats);
+
+        if (locRes.data?.success && locRes.data.data?.locations) {
+          setCampusLocations(locRes.data.data.locations);
         }
-        setCategories(finalCats);
       } catch (err) {
         console.error('Failed to load master data for complaint modal', err);
       }
@@ -252,12 +278,97 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     fetchMasterData();
   }, [isOpen]);
 
-  // Check duplicates and fetch assets when room changes
+  // Section 3: 14 strict Building / Room categories
+  const buildingCategories: DisplayCategory[] = useMemo(() => {
+    const usedIds = new Set<string>();
+
+    return BUILDING_CATEGORY_RULES.map((rule) => {
+      let matched = categories.find((c) => !usedIds.has(c._id) && rule.match.test(c.name));
+      if (!matched && rule.fallbackMatch) {
+        matched = categories.find((c) => !usedIds.has(c._id) && rule.fallbackMatch!.test(c.name));
+      }
+
+      if (matched) {
+        usedIds.add(matched._id);
+        return {
+          _id: matched._id,
+          name: rule.displayName,
+          originalName: matched.name,
+          defaultSLAHours: matched.defaultSLAHours || rule.defaultSLA,
+          subcategories: matched.subcategories || [],
+          isSOS: rule.isSOS || false,
+        };
+      }
+
+      // Safe fallback ensuring exactly 14 categories are always shown
+      return {
+        _id: `fallback_${rule.displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        name: rule.displayName,
+        originalName: rule.displayName,
+        defaultSLAHours: rule.defaultSLA,
+        subcategories: [],
+        isSOS: rule.isSOS || false,
+      };
+    });
+  }, [categories]);
+
+  const buildingCatIdSet = useMemo(() => {
+    return new Set(buildingCategories.map((c) => c._id));
+  }, [buildingCategories]);
+
+  // Section 4: All remaining campus facility, transport, and outdoor categories
+  const campusFacilityCategories: DisplayCategory[] = useMemo(() => {
+    const remaining = categories.filter((c) => !buildingCatIdSet.has(c._id));
+
+    const mapCampusLabel = (rawName: string): string => {
+      if (/women|sos/i.test(rawName)) return 'Women Safety & SOS';
+      if (/bus|transport/i.test(rawName)) return 'Bus & Transport Incidents';
+      if (/parking|security/i.test(rawName)) return 'Parking Issues';
+      if (/hostel/i.test(rawName)) return 'Hostel Facilities';
+      if (/road|subway|pathway/i.test(rawName)) return 'Road & Subway Issues';
+      if (/sport|ground|gym/i.test(rawName)) return 'Ground & Sports Facilities';
+      if (/garden|outdoor/i.test(rawName)) return 'Garden & Outdoor Maintenance';
+      if (/util/i.test(rawName)) return 'Campus-Wide Utilities';
+      return rawName;
+    };
+
+    const mapped: DisplayCategory[] = remaining.map((c) => ({
+      _id: c._id,
+      name: mapCampusLabel(c.name),
+      originalName: c.name,
+      defaultSLAHours: c.defaultSLAHours || 12,
+      subcategories: c.subcategories || [],
+      isSOS: /women|sos|emergency/i.test(c.name),
+    }));
+
+    // Ensure Women Safety & SOS is prominently placed first
+    const sosList = mapped.filter((c) => c.isSOS);
+    const nonSosList = mapped.filter((c) => !c.isSOS);
+    return [...sosList, ...nonSosList];
+  }, [categories, buildingCatIdSet]);
+
+  const activeCategories = locationMode === 'BUILDING' ? buildingCategories : campusFacilityCategories;
+
+  // Mode switching resets fields to avoid stale values
+  const handleSwitchMode = (mode: 'BUILDING' | 'CAMPUS_ZONE') => {
+    if (mode === locationMode) return;
+    setLocationMode(mode);
+    setCategoryId('');
+    setSubcategory('');
+    setErrorMsg('');
+    if (mode === 'BUILDING') {
+      setSelectedLocationId('');
+    } else {
+      setBuildingName('');
+      setFloor('');
+      setRoomNumber('');
+    }
+  };
+
+  // Duplicate ticket check with debouncing for manually typed room numbers
   useEffect(() => {
-    if (!buildingName || !floor || !roomNumber) {
+    if (locationMode !== 'BUILDING' || !buildingName || !floor || !roomNumber.trim() || roomNumber.trim().length < 2) {
       setDuplicates([]);
-      setAvailableAssets([]);
-      setSelectedAssetId('');
       return;
     }
 
@@ -265,7 +376,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
       setIsCheckingDuplicates(true);
       try {
         const res = await api.get('/complaints/check-duplicate', {
-          params: { buildingName, floor, roomNumber, categoryId },
+          params: { buildingName, floor, roomNumber: roomNumber.trim(), categoryId },
         });
         setDuplicates(res.data.duplicates || []);
       } catch (err) {
@@ -275,23 +386,9 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
       }
     };
 
-    const fetchRoomAssets = async () => {
-      setIsLoadingAssets(true);
-      try {
-        const res = await api.get('/assets', {
-          params: { building: buildingName, floor, room: roomNumber, status: 'ACTIVE' },
-        });
-        setAvailableAssets(res.data.assets || []);
-      } catch (err) {
-        console.error('Failed to fetch room assets', err);
-      } finally {
-        setIsLoadingAssets(false);
-      }
-    };
-
-    checkDupes();
-    fetchRoomAssets();
-  }, [buildingName, floor, roomNumber, categoryId]);
+    const timer = setTimeout(checkDupes, 400);
+    return () => clearTimeout(timer);
+  }, [buildingName, floor, roomNumber, categoryId, locationMode]);
 
   const handleUpvoteDuplicate = async (comp: IComplaint) => {
     try {
@@ -304,10 +401,45 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     }
   };
 
+  // Form submission with strict frontend validation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !categoryId || !buildingName || !floor || !roomNumber) {
-      setErrorMsg('Please fill in all mandatory fields (Location, Category, Title, Description).');
+
+    if (locationMode === 'BUILDING') {
+      if (!buildingName.trim() || !floor.trim() || !roomNumber.trim()) {
+        setErrorMsg('Please select a Building, Floor, and enter a Room / Specific Spot.');
+        return;
+      }
+    } else {
+      if (!selectedLocationId) {
+        setErrorMsg('Please select a Campus Facility / Zone from the list.');
+        return;
+      }
+    }
+
+    if (!categoryId) {
+      setErrorMsg('Please select an Issue Category.');
+      return;
+    }
+
+    if (!title.trim()) {
+      setErrorMsg('Please enter an Issue Title.');
+      return;
+    }
+
+    if (!incidentTimestamp) {
+      setErrorMsg('Incident Time is mandatory. Please select the incident date and time.');
+      return;
+    }
+
+    const parsedDate = new Date(incidentTimestamp);
+    if (isNaN(parsedDate.getTime())) {
+      setErrorMsg('Please enter a valid Incident Date and Time.');
+      return;
+    }
+
+    if (!description.trim()) {
+      setErrorMsg('Detailed Problem Description is mandatory. Please describe what is wrong.');
       return;
     }
 
@@ -315,27 +447,73 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     setErrorMsg('');
 
     try {
-      await api.post('/complaints', {
-        title,
-        description,
-        categoryId,
-        buildingName,
-        floor,
-        roomNumber,
-        priority,
-        assetId: selectedAssetId || undefined,
-        beforeImages: beforeImages.length > 0 ? beforeImages : [
-          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'
-        ],
-        isAnonymous,
-        voiceTranscription: description,
-      });
+      let payload: any;
+      if (locationMode === 'CAMPUS_ZONE') {
+        const selectedLoc = campusLocations.find((l) => l._id === selectedLocationId);
+        const effBuilding = selectedLoc ? (selectedLoc.buildingName || selectedLoc.name) : 'Campus Facility';
+        const effFloor = selectedLoc ? (selectedLoc.floor || 'G') : 'Ground Floor';
+        const effRoom = selectedLoc ? (selectedLoc.roomNumber || selectedLoc.name) : 'General Area';
+        const effPath = selectedLoc ? (selectedLoc.fullPath || selectedLoc.name) : effBuilding;
+
+        payload = {
+          title: title.trim(),
+          description: description.trim(),
+          categoryId,
+          subcategory: subcategory || undefined,
+          incidentTimestamp: parsedDate.toISOString(),
+          locationId: selectedLocationId,
+          locationPath: effPath,
+          buildingName: effBuilding,
+          floor: effFloor,
+          roomNumber: effRoom,
+          priority,
+          beforeImages: beforeImages.length > 0 ? beforeImages : [
+            'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'
+          ],
+          isAnonymous,
+          voiceTranscription: description.trim(),
+        };
+      } else {
+        const effBuilding = buildingName.trim();
+        const effFloor = floor.trim();
+        const effRoom = roomNumber.trim();
+        const effPath = `${effBuilding} > ${effFloor} > ${effRoom}`;
+
+        payload = {
+          title: title.trim(),
+          description: description.trim(),
+          categoryId,
+          subcategory: subcategory || undefined,
+          incidentTimestamp: parsedDate.toISOString(),
+          locationPath: effPath,
+          buildingName: effBuilding,
+          floor: effFloor,
+          roomNumber: effRoom,
+          priority,
+          beforeImages: beforeImages.length > 0 ? beforeImages : [
+            'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'
+          ],
+          isAnonymous,
+          voiceTranscription: description.trim(),
+        };
+      }
+
+      await api.post('/complaints', payload);
 
       canvasConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
       onSuccess();
       onClose();
       setIsAnonymous(false);
-      setSelectedAssetId('');
+      setSelectedLocationId('');
+      setBuildingName('');
+      setFloor('');
+      setRoomNumber('');
+      setCategoryId('');
+      setSubcategory('');
+      setIncidentTimestamp('');
+      setTitle('');
+      setDescription('');
+      setBeforeImages([]);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Failed to submit complaint.');
     } finally {
@@ -347,7 +525,6 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
   const buildings = Object.keys(PREDEFINED_LOCATIONS);
   const floors = buildingName ? Object.keys(PREDEFINED_LOCATIONS[buildingName] || {}) : [];
-  const rooms = buildingName && floor ? PREDEFINED_LOCATIONS[buildingName][floor] || [] : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
@@ -364,8 +541,10 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
             </div>
           </div>
           <button 
+            type="button"
             onClick={() => { stopCamera(); onClose(); }} 
             className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
@@ -382,110 +561,117 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
           {/* Location Cascade Selection */}
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-650 flex items-center gap-1.5 uppercase tracking-wider">
-              <MapPin className="h-3.5 w-3.5 text-rose-500" />
-              1. Select Campus Location (Building → Floor → Room)
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-650 flex items-center gap-1.5 uppercase tracking-wider">
+                <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                1. Select Campus Location & Facility
+              </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <span className="text-[11px] text-slate-500 font-semibold block mb-1">Building</span>
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[11px] font-semibold">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('BUILDING')}
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                    locationMode === 'BUILDING'
+                      ? 'bg-white text-blue-600 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Building / Room
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('CAMPUS_ZONE')}
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                    locationMode === 'CAMPUS_ZONE'
+                      ? 'bg-white text-indigo-600 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Campus Facility / Zone
+                </button>
+              </div>
+            </div>
+
+            {locationMode === 'CAMPUS_ZONE' ? (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="text-[11px] font-semibold text-slate-600 block">
+                  Select Facility (Bus, Main Gate, Sports Grounds, Roads, Hostels, Canteens, Utilities)
+                </label>
                 <select
-                  value={buildingName}
-                  onChange={(e) => {
-                    setBuildingName(e.target.value);
-                    setFloor('');
-                    setRoomNumber('');
-                  }}
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
                   className="w-full glass-input rounded-xl px-3 py-2 text-xs"
                   required
                 >
-                  <option value="" className="bg-white text-slate-800">Select Building...</option>
-                  {buildings.map((b) => (
-                    <option key={b} value={b} className="bg-white text-slate-800">{b}</option>
+                  <option value="">-- Choose from {campusLocations.length} Campus Facilities & Zones --</option>
+                  {campusLocations.map((loc) => (
+                    <option key={loc._id} value={loc._id}>
+                      [{loc.code}] {loc.name} {loc.zone ? `(${loc.zone})` : ''} - {loc.locationType.replace(/_/g, ' ')}
+                    </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-500 font-semibold block mb-1">Floor</span>
-                <select
-                  value={floor}
-                  onChange={(e) => {
-                    setFloor(e.target.value);
-                    setRoomNumber('');
-                  }}
-                  disabled={!buildingName}
-                  className="w-full glass-input rounded-xl px-3 py-2 text-xs disabled:opacity-50"
-                  required
-                >
-                  <option value="" className="bg-white text-slate-800">Select Floor...</option>
-                  {floors.map((f) => (
-                    <option key={f} value={f} className="bg-white text-slate-800">{f}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-500 font-semibold block mb-1">Room / Specific Spot</span>
-                <select
-                  value={roomNumber}
-                  onChange={(e) => setRoomNumber(e.target.value)}
-                  disabled={!floor}
-                  className="w-full glass-input rounded-xl px-3 py-2 text-xs disabled:opacity-50"
-                  required
-                >
-                  <option value="" className="bg-white text-slate-800">Select Room...</option>
-                  {rooms.map((r) => (
-                    <option key={r} value={r} className="bg-white text-slate-800">{r}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Optional Campus Asset Linkage */}
-            <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5">
-                  <Package className="h-3.5 w-3.5 text-indigo-500" />
-                  Specific Campus Asset Involved (Optional)
-                </span>
-                {isLoadingAssets ? (
-                  <span className="text-[10px] text-slate-400 font-medium animate-pulse">Scanning assets...</span>
-                ) : availableAssets.length > 0 ? (
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
-                    {availableAssets.length} asset(s) tagged in this room
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-slate-400">None registered</span>
+                {selectedLocationId && (
+                  <p className="text-[11px] text-emerald-600 font-medium">
+                    ✓ Location mapped: {campusLocations.find((l) => l._id === selectedLocationId)?.fullPath || campusLocations.find((l) => l._id === selectedLocationId)?.name}
+                  </p>
                 )}
               </div>
-              <select
-                value={selectedAssetId}
-                onChange={(e) => setSelectedAssetId(e.target.value)}
-                disabled={!roomNumber || availableAssets.length === 0}
-                className="w-full glass-input rounded-xl px-3 py-2 text-xs disabled:opacity-60"
-              >
-                <option value="" className="bg-white text-slate-800">
-                  {roomNumber
-                    ? availableAssets.length > 0
-                      ? '-- Select Asset or Leave Empty for General Room Issue --'
-                      : '-- No specific registered assets in this room (General Report) --'
-                    : '-- Select room first to view registered assets --'}
-                </option>
-                {availableAssets.map((ast) => (
-                  <option key={ast._id} value={ast._id} className="bg-white text-slate-800">
-                    [{ast.assetCode}] {ast.assetName} • Condition: {ast.condition}
-                  </option>
-                ))}
-              </select>
-              {selectedAssetId && (
-                <p className="text-[11px] text-indigo-600 mt-1.5 font-medium flex items-center gap-1">
-                  <Check className="h-3 w-3" />
-                  Complaint will be directly linked to this equipment for lifecycle maintenance tracking.
-                </p>
-              )}
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Building Dropdown */}
+                <div>
+                  <span className="text-[11px] text-slate-500 font-semibold block mb-1">Building</span>
+                  <select
+                    value={buildingName}
+                    onChange={(e) => {
+                      setBuildingName(e.target.value);
+                      setFloor('');
+                      setRoomNumber('');
+                    }}
+                    className="w-full glass-input rounded-xl px-3 py-2 text-xs"
+                    required
+                  >
+                    <option value="" className="bg-white text-slate-800">Select Building...</option>
+                    {buildings.map((b) => (
+                      <option key={b} value={b} className="bg-white text-slate-800">{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Floor Dropdown */}
+                <div>
+                  <span className="text-[11px] text-slate-500 font-semibold block mb-1">Floor</span>
+                  <select
+                    value={floor}
+                    onChange={(e) => {
+                      setFloor(e.target.value);
+                    }}
+                    disabled={!buildingName}
+                    className="w-full glass-input rounded-xl px-3 py-2 text-xs disabled:opacity-50"
+                    required
+                  >
+                    <option value="" className="bg-white text-slate-800">Select Floor...</option>
+                    {floors.map((f) => (
+                      <option key={f} value={f} className="bg-white text-slate-800">{f}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Room / Specific Spot: Replaced with normal text input field */}
+                <div>
+                  <span className="text-[11px] text-slate-500 font-semibold block mb-1">Room / Specific Spot</span>
+                  <input
+                    type="text"
+                    value={roomNumber}
+                    onChange={(e) => setRoomNumber(e.target.value)}
+                    placeholder="Enter room number or specific spot (e.g., Room 204)"
+                    className="w-full glass-input rounded-xl px-3 py-2 text-xs"
+                    required
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* DUPLICATE PREVENTION ALERT BANNER */}
@@ -508,19 +694,19 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                 {duplicates.map((dupe) => (
                   <div key={dupe._id} className="p-3 rounded-lg bg-white border border-amber-200 flex items-center justify-between shadow-sm">
                     <div>
-                      <span className="font-mono text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                        {dupe.ticketId}
-                      </span>
-                      <h4 className="text-xs font-bold text-slate-800 mt-1">{dupe.title}</h4>
-                      <p className="text-[11px] text-slate-500 font-medium">Status: {dupe.status} • Upvotes: {dupe.upvotes?.length || 0}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-800">{dupe.ticketId}: {dupe.title}</span>
+                        <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-semibold">{dupe.status}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{dupe.description.slice(0, 70)}...</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleUpvoteDuplicate(dupe)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-450 flex items-center gap-1.5 shadow-md cursor-pointer"
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                     >
-                      <ThumbsUp className="h-3.5 w-3.5 fill-current" />
-                      Upvote & Join
+                      <span>👍 Upvote</span>
+                      <span className="bg-amber-600/60 px-1 rounded text-[10px]">{(dupe.upvotes || []).length}</span>
                     </button>
                   </div>
                 ))}
@@ -530,33 +716,38 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
           {/* Category Selection Grid */}
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-650 flex items-center gap-1.5 uppercase tracking-wider">
-              2. Select Issue Category
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-650 flex items-center gap-1.5 uppercase tracking-wider">
+                2. Select Issue Category
+              </label>
+              <span className="text-[11px] text-slate-400 font-medium">
+                {locationMode === 'BUILDING' ? 'Building & Room Categories (14)' : 'Campus-Wide & Facility Categories'}
+              </span>
+            </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {categories.map((cat) => {
+              {activeCategories.map((cat) => {
                 const isSelected = categoryId === cat._id;
-                const isWomenSafetyCat = /women|sos/i.test(cat.name);
+                const isSOS = cat.isSOS;
                 return (
                   <button
                     key={cat._id}
                     type="button"
                     onClick={() => {
                       setCategoryId(cat._id);
-                      if (isWomenSafetyCat) {
+                      if (isSOS) {
                         setPriority('Urgent');
-                        if (!title) setTitle(`Urgent Women Safety assistance needed in ${roomNumber || 'campus'}`);
+                        if (!title) setTitle(`Urgent ${cat.name} assistance needed in ${roomNumber || 'campus'}`);
                       } else {
                         if (!title) setTitle(`${cat.name} issue in ${roomNumber || 'room'}`);
                       }
                     }}
                     className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                       isSelected
-                        ? isWomenSafetyCat
+                        ? isSOS
                           ? 'bg-rose-50 border-rose-500 text-slate-800 shadow-md ring-2 ring-rose-500/30'
                           : 'bg-blue-50 border-blue-400 text-slate-800 shadow-md ring-2 ring-blue-500/20'
-                        : isWomenSafetyCat
+                        : isSOS
                         ? 'bg-rose-50/60 border-rose-200 text-rose-900 hover:border-rose-400'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-350 hover:text-slate-800'
                     }`}
@@ -564,47 +755,85 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                     <div className="flex items-center justify-between mb-2">
                       {getCategoryIcon(cat.name)}
                       {isSelected ? (
-                        <Check className={`h-4 w-4 ${isWomenSafetyCat ? 'text-rose-600' : 'text-blue-600'}`} />
-                      ) : isWomenSafetyCat ? (
+                        <Check className={`h-4 w-4 ${isSOS ? 'text-rose-600' : 'text-blue-600'}`} />
+                      ) : isSOS ? (
                         <span className="text-[9px] font-extrabold uppercase bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">
                           SOS
                         </span>
                       ) : null}
                     </div>
                     <div>
-                      <p className={`text-xs font-bold leading-tight ${isWomenSafetyCat ? 'text-rose-900' : ''}`}>{cat.name}</p>
+                      <p className={`text-xs font-bold leading-tight ${isSOS ? 'text-rose-900' : ''}`}>{cat.name}</p>
                       <p className="text-[10px] text-slate-400 font-semibold mt-1">{cat.defaultSLAHours}h SLA</p>
                     </div>
                   </button>
                 );
               })}
             </div>
+
+            {/* Subcategory Selector when available */}
+            {(() => {
+              const selectedCat = activeCategories.find((c) => c._id === categoryId);
+              if (!selectedCat?.subcategories || selectedCat.subcategories.length === 0) return null;
+              return (
+                <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <label className="text-[11px] font-semibold text-slate-650 block">
+                    Select Specific Subcategory (Optional)
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedCat.subcategories.map((sub) => (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => setSubcategory(subcategory === sub ? '' : sub)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
+                          subcategory === sub
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white text-slate-650 border-slate-200 hover:border-slate-350'
+                        }`}
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* HIGH-RISK / WOMEN SAFETY EMERGENCY MOBILE NOTIFICATION BANNER */}
-          {(categories.find((c) => c._id === categoryId && /women|sos/i.test(c.name)) || priority === 'Urgent' || priority === 'High') && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-900 flex items-start gap-3 shadow-sm animate-in fade-in">
-              <ShieldAlert className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5 animate-pulse" />
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-xs uppercase tracking-wide text-rose-800">
-                    🚨 Emergency Mobile SMS Alert Protocol Active
-                  </span>
-                  <span className="bg-rose-200 text-rose-900 font-extrabold text-[10px] px-2 py-0.5 rounded-full border border-rose-300">
-                    SMS NOTIFY HOD & COORDINATORS
-                  </span>
+          {(() => {
+            const selectedCat = activeCategories.find((c) => c._id === categoryId);
+            if (selectedCat?.isSOS || priority === 'Urgent' || priority === 'High') {
+              return (
+                <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-900 flex items-start gap-3 shadow-sm animate-in fade-in">
+                  <ShieldAlert className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5 animate-pulse" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-xs uppercase tracking-wide text-rose-800">
+                        🚨 Emergency Mobile SMS Alert Protocol Active
+                      </span>
+                      <span className="bg-rose-200 text-rose-900 font-extrabold text-[10px] px-2 py-0.5 rounded-full border border-rose-300">
+                        SMS NOTIFY HOD & COORDINATORS
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
+                      Submitting this high-risk issue will automatically dispatch instant mobile SMS alerts with exact location details to the <strong>HOD & Safety Coordinators</strong> at <strong>99529112177</strong> and <strong>6382373918</strong> for rapid intervention.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
-                  Submitting this high-risk issue will automatically dispatch instant mobile SMS alerts with exact location details to the <strong>HOD & Safety Coordinators</strong> at <strong>99529112177</strong> and <strong>6382373918</strong> for rapid intervention.
-                </p>
-              </div>
-            </div>
-          )}
+              );
+            }
+            return null;
+          })()}
 
-          {/* Title & Priority */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Title, Priority & Incident Timestamp */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-650 block mb-1">Issue Title</label>
+              <label className="text-xs font-semibold text-slate-650 flex items-center gap-1 mb-1">
+                <span>Issue Title</span>
+                <span className="text-rose-500 font-bold">*</span>
+              </label>
               <input
                 type="text"
                 value={title}
@@ -628,13 +857,28 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                 <option value="Urgent" className="bg-white text-slate-800">🚨 Urgent (Emergency / SMS Alert)</option>
               </select>
             </div>
+
+            {/* Section 6: Incident Time - Mandatory with visible asterisk */}
+            <div>
+              <label className="text-xs font-semibold text-slate-650 flex items-center gap-1 mb-1">
+                <span>Incident Time</span>
+                <span className="text-rose-500 font-bold">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={incidentTimestamp}
+                onChange={(e) => setIncidentTimestamp(e.target.value)}
+                className="w-full glass-input rounded-xl px-3 py-2 text-xs"
+                required
+              />
+            </div>
           </div>
 
-          {/* Detailed Problem Description */}
+          {/* Section 5: Detailed Problem Description - Mandatory with visible asterisk */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
               <span>Detailed Problem Description</span>
-              <span className="text-[10px] text-slate-400 font-normal">(Required)</span>
+              <span className="text-rose-500 font-bold">*</span>
             </label>
 
             <textarea
@@ -729,12 +973,11 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                   )}
                 </div>
 
-                {/* Direct Camera Trigger */}
+                {/* Instant Live Camera Activation */}
                 <button
                   type="button"
                   onClick={startCamera}
-                  disabled={isUploading}
-                  className="border-2 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/40 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors bg-white/40 min-h-[95px] text-center w-full"
+                  className="border border-slate-200 hover:border-emerald-500/80 hover:bg-emerald-50/30 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors bg-white/40 min-h-[95px] text-center"
                 >
                   <Camera className="h-5 w-5 text-emerald-600" />
                   <span className="text-xs font-semibold text-slate-700">Take Photo with Camera</span>
@@ -743,22 +986,22 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
               </div>
             )}
 
-            {/* Preview of Uploaded / Captured Images */}
+            {/* Media Preview Thumbnails */}
             {beforeImages.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
+              <div className="flex gap-2 flex-wrap pt-2">
                 {beforeImages.map((img, idx) => (
-                  <div key={idx} className="relative group h-16 w-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                  <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 h-16 w-16 bg-slate-100 flex-shrink-0 shadow-xs">
                     {isVideoUrl(img) ? (
-                      <video src={img} className="h-full w-full object-cover" muted playsInline />
+                      <video src={img} className="h-full w-full object-cover" />
                     ) : (
-                      <img src={img} alt="Before Preview" className="h-full w-full object-cover" />
+                      <img src={img} alt="Evidence preview" className="h-full w-full object-cover" />
                     )}
                     <button
                       type="button"
                       onClick={() => setBeforeImages(beforeImages.filter((_, i) => i !== idx))}
-                      className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[10px] font-bold cursor-pointer"
+                      className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      Remove
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
@@ -766,7 +1009,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
             )}
           </div>
 
-          {/* REPORTER IDENTITY PREFERENCE */}
+          {/* REPORTER IDENTITY SELECTION */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">

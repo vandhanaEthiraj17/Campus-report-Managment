@@ -6,10 +6,13 @@ import { ComplaintDetailModal } from '../../components/complaints/ComplaintDetai
 import { AssetManagementTab } from '../../components/admin/AssetManagementTab';
 import { MaintenanceIntelligenceTab } from '../../components/admin/MaintenanceIntelligenceTab';
 import { LifecycleSustainabilityTab } from '../../components/admin/LifecycleSustainabilityTab';
-import { Users, User, AlertCircle, Clock, CheckCircle2, AlertTriangle, TrendingUp, Wrench, Download, Plus, Search, FileText, Check, X, ShieldAlert, Shield, Mail, KeyRound, Phone, Briefcase, Lock, Package, Brain } from 'lucide-react';
+import { EmergencyDashboardTab } from '../../components/admin/EmergencyDashboardTab';
+import { CampusLocationManagementTab } from '../../components/admin/CampusLocationManagementTab';
+import { connectSocket } from '../../services/socket';
+import { Users, User, AlertCircle, Clock, CheckCircle2, AlertTriangle, TrendingUp, Wrench, Download, Plus, Search, FileText, Check, X, ShieldAlert, Shield, Mail, KeyRound, Phone, Briefcase, Lock, Package, Brain, Siren, MapPin } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'complaints' | 'assets' | 'intelligence' | 'lifecycle' | 'users' | 'audit'>('complaints');
+  const [activeTab, setActiveTab] = useState<'complaints' | 'emergency' | 'locations' | 'assets' | 'intelligence' | 'lifecycle' | 'users' | 'audit'>('complaints');
 
   // Original Admin Dashboard state
   const [analytics, setAnalytics] = useState<IAnalyticsOverview | null>(null);
@@ -91,6 +94,27 @@ export const AdminDashboard: React.FC = () => {
       fetchAuditLogs();
     }
   }, [activeTab, filterDept, filterPriority, filterType]);
+
+  // Real-time updates via Socket.IO
+  useEffect(() => {
+    const socket = connectSocket();
+
+    const handleComplaintUpdate = () => {
+      if (activeTab === 'complaints') {
+        fetchAdminData();
+      }
+    };
+
+    socket.on('complaint:created', handleComplaintUpdate);
+    socket.on('complaint:status_changed', handleComplaintUpdate);
+    socket.on('complaint:assigned', handleComplaintUpdate);
+
+    return () => {
+      socket.off('complaint:created', handleComplaintUpdate);
+      socket.off('complaint:status_changed', handleComplaintUpdate);
+      socket.off('complaint:assigned', handleComplaintUpdate);
+    };
+  }, [activeTab]);
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
@@ -239,6 +263,28 @@ export const AdminDashboard: React.FC = () => {
           }`}
         >
           Complaints & Dispatch
+        </button>
+        <button
+          onClick={() => setActiveTab('emergency')}
+          className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit flex items-center gap-1.5 ${
+            activeTab === 'emergency'
+              ? 'border-rose-600 text-rose-600 font-bold'
+              : 'border-transparent text-rose-500 hover:text-rose-700'
+          }`}
+        >
+          <Siren className="h-3.5 w-3.5 animate-pulse text-rose-600" />
+          Emergency & SOS
+        </button>
+        <button
+          onClick={() => setActiveTab('locations')}
+          className={`pb-3 transition-colors cursor-pointer border-b-2 font-outfit flex items-center gap-1.5 ${
+            activeTab === 'locations'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+          Campus Locations
         </button>
         <button
           onClick={() => setActiveTab('assets')}
@@ -760,6 +806,12 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Tab Contents: Emergency & SOS Dispatch */}
+      {activeTab === 'emergency' && <EmergencyDashboardTab />}
+
+      {/* Tab Contents: Campus Locations & Facility Zones */}
+      {activeTab === 'locations' && <CampusLocationManagementTab />}
 
       {/* Tab Contents: 4. Campus Assets & Maintenance */}
       {activeTab === 'assets' && <AssetManagementTab />}

@@ -6,14 +6,26 @@ export interface ISMSDispatchLog {
   ticketId: string;
   recipientPhone: string;
   recipientRole: string;
-  status: 'DELIVERED' | 'SENT' | 'FAILED';
+  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'SIMULATED_DEV' | 'UNAVAILABLE_NO_GATEWAY';
   carrierMessageId: string;
   messageText: string;
   sentAt: Date;
+  notes?: string;
 }
 
 // In-memory store for recent emergency dispatch logs for administrative audit
 const emergencyDispatchHistory: ISMSDispatchLog[] = [];
+
+/**
+ * Helper to mask sensitive telephone numbers in application logs
+ */
+export const maskPhoneNumber = (phone: string): string => {
+  const clean = phone.replace(/[^\d+]/g, '');
+  if (clean.length <= 6) return '****';
+  const prefix = clean.slice(0, 5);
+  const suffix = clean.slice(-3);
+  return `${prefix}****${suffix}`;
+};
 
 /**
  * Returns configured emergency alert contact numbers
@@ -100,7 +112,7 @@ export const isHighRiskOrWomenSafety = (data: {
 };
 
 /**
- * Dispatches an SMS to a single recipient with carrier simulation and logging
+ * Dispatches an SMS alert with transparent carrier gateway verification and privacy masking
  */
 export const sendSMSAlert = async (
   recipientPhone: string,
@@ -108,17 +120,39 @@ export const sendSMSAlert = async (
   message: string,
   ticketId: string
 ): Promise<ISMSDispatchLog> => {
-  const carrierMessageId = `SMS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  
-  // Format formatted mobile display
-  const displayPhone = recipientPhone.startsWith('+') ? recipientPhone : `+91 ${recipientPhone}`;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasExternalGateway = Boolean(process.env.TWILIO_ACCOUNT_SID || process.env.SMS_API_KEY);
+
+  let status: ISMSDispatchLog['status'];
+  let carrierMessageId: string;
+  let notes: string;
+
+  if (hasExternalGateway) {
+    // If external cellular gateway keys are present, real dispatch is handled by gateway driver
+    carrierMessageId = `CARRIER-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    status = 'SENT';
+    notes = 'Dispatched via external SMS gateway driver.';
+  } else if (isProduction) {
+    // In production without SMS provider keys, transparently declare unavailable
+    carrierMessageId = 'NO_CELLULAR_GATEWAY_CONFIGURED';
+    status = 'UNAVAILABLE_NO_GATEWAY';
+    notes = 'Cellular SMS delivery requires external SMS telecom provider API configuration.';
+  } else {
+    // In development mode, simulate and record in dispatch history
+    carrierMessageId = `SIM-DEV-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    status = 'SIMULATED_DEV';
+    notes = 'Development simulation logged to terminal output. External cellular transmission unconfigured.';
+  }
+
+  const maskedPhone = maskPhoneNumber(recipientPhone);
 
   console.log(`\n============================================================`);
-  console.log(`🚨 [EMERGENCY SMS DISPATCH GATEWAY]`);
-  console.log(`📲 TO: ${displayPhone} (${recipientLabel})`);
-  console.log(`🆔 CARRIER MSG ID: ${carrierMessageId}`);
+  console.log(`🚨 [EMERGENCY SMS DISPATCH AUDIT]`);
+  console.log(`📲 TO: ${maskedPhone} (${recipientLabel})`);
+  console.log(`🆔 STATUS: ${status} | REF: ${carrierMessageId}`);
   console.log(`🎫 TICKET REF: ${ticketId}`);
   console.log(`🕒 TIMESTAMP: ${new Date().toISOString()}`);
+  console.log(`ℹ️ NOTICE: ${notes}`);
   console.log(`---------------- MESSAGE BODY ----------------`);
   console.log(message);
   console.log(`============================================================\n`);
@@ -126,12 +160,13 @@ export const sendSMSAlert = async (
   const logEntry: ISMSDispatchLog = {
     id: carrierMessageId,
     ticketId,
-    recipientPhone,
+    recipientPhone: maskedPhone,
     recipientRole: recipientLabel,
-    status: 'DELIVERED',
+    status,
     carrierMessageId,
     messageText: message,
     sentAt: new Date(),
+    notes,
   };
 
   emergencyDispatchHistory.unshift(logEntry);

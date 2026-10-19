@@ -7,6 +7,8 @@ export interface MaintenanceSchedulerReport {
   autoScheduledTasks: number;
 }
 
+let isSchedulerRunning = false;
+
 /**
  * Background worker to process preventive maintenance schedules, identify overdue tasks,
  * and dispatch reminders without duplicate notification spam.
@@ -18,6 +20,11 @@ export const checkAndProcessMaintenance = async (): Promise<MaintenanceScheduler
     autoScheduledTasks: 0,
   };
 
+  if (isSchedulerRunning) {
+    return report;
+  }
+
+  isSchedulerRunning = true;
   try {
     const now = new Date();
 
@@ -106,5 +113,7 @@ export const checkAndProcessMaintenance = async (): Promise<MaintenanceScheduler
   } catch (error) {
     console.error('[Maintenance Scheduler Error]:', error);
     return report;
+  } finally {
+    isSchedulerRunning = false;
   }
 };

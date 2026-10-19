@@ -26,42 +26,63 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const ALLOWED_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.webm']);
+const ALLOWED_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+]);
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const safeExt = ALLOWED_EXTS.has(rawExt) ? rawExt : '.bin';
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`;
+    cb(null, uniqueSuffix);
+  },
 });
 
 const upload = multer({
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|gif|mp4|mov|avi|mkv|webm/i;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    if (mimetype && extname) {
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const mime = file.mimetype.toLowerCase();
+
+    if (ALLOWED_EXTS.has(rawExt) && ALLOWED_MIMES.has(mime)) {
       return cb(null, true);
     }
-    cb(new Error('Only images and videos are allowed!'));
-  }
+    cb(new Error('Invalid file type. Only JPEG, PNG, WebP, GIF images and MP4, MOV, WebM videos are permitted.'));
+  },
 });
 
 router.use(authenticateToken);
 
-router.post('/upload', upload.single('file'), (req: any, res: any) => {
-  try {
+router.post('/upload', (req: any, res: any) => {
+  upload.single('file')(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File size exceeds maximum permitted limit of 25MB.' });
+      }
+      return res.status(400).json({ message: `Upload validation error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ message: err.message || 'File upload failed.' });
+    }
+
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded.' });
     }
+
     const fileUrl = `/uploads/${req.file.filename}`;
     res.status(200).json({ url: fileUrl });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'File upload failed.' });
-  }
+  });
 });
 
 router.get('/check-duplicate', checkDuplicates);

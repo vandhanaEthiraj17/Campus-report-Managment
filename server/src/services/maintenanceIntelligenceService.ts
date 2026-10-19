@@ -389,7 +389,7 @@ export const analyzeRecurringIssues = async (
     .map((item) => ({
       building: item.building,
       room: item.room,
-      issueType: 'ELECTRICAL',
+      issueType: 'ELECTRICAL' as const,
       incidentCount: item.total,
       activeCount: item.active,
       resolvedCount: item.resolved,
@@ -431,7 +431,7 @@ export const analyzeRecurringIssues = async (
     .map((item) => ({
       building: item.building,
       room: item.room,
-      issueType: 'NETWORK',
+      issueType: 'NETWORK' as const,
       incidentCount: item.total,
       activeCount: item.active,
       resolvedCount: item.resolved,
@@ -523,7 +523,7 @@ export const evaluateAssetRecommendations = async (
     }
 
     const year = now.getFullYear();
-    const rand = Math.floor(1000 + Math.random() * 9000);
+    const rand = `${Date.now().toString().slice(-4)}${Math.floor(100 + Math.random() * 900)}`;
     const recommendationCode = `REC-${year}-${rand}`;
 
     const newRec = await Recommendation.create({

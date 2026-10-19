@@ -36,12 +36,12 @@ export interface IRecommendation extends Document {
   linkedMaintenanceRecord?: Types.ObjectId;
   status: RecommendationStatus;
   healthScoreAtCreation: number;
-  reviewedBy?: Types.ObjectId;
+  reviewedBy?: Types.ObjectId | string;
   reviewedByName?: string;
   reviewedAt?: Date;
   resolvedAt?: Date;
   dismissalReason?: string;
-  dismissedBy?: Types.ObjectId;
+  dismissedBy?: Types.ObjectId | string;
   dismissedByName?: string;
   createdAt: Date;
   updatedAt: Date;

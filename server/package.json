@@ -8,7 +8,14 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "seed": "tsx src/utils/seed.ts",
-    "import-campus-data": "tsx src/utils/importCampusData.ts"
+    "import-campus-data": "tsx src/utils/importCampusData.ts",
+    "test:auth": "tsx src/utils/testAuthSuite.ts",
+    "test:assets": "tsx src/utils/testAssetSuite.ts",
+    "test:intelligence": "tsx src/utils/testIntelligenceSuite.ts",
+    "test:sustainability": "tsx src/utils/testSustainabilitySuite.ts",
+    "test:integration": "tsx src/utils/testIntegrationSuite.ts",
+    "test:campus": "tsx src/utils/testCampusFeaturesSuite.ts",
+    "test:all": "tsx src/utils/testAuthSuite.ts && tsx src/utils/testAssetSuite.ts && tsx src/utils/testIntelligenceSuite.ts && tsx src/utils/testSustainabilitySuite.ts && tsx src/utils/testIntegrationSuite.ts && tsx src/utils/testCampusFeaturesSuite.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -18,6 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.3",
     "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.4",
+    "twilio": "^6.2.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },

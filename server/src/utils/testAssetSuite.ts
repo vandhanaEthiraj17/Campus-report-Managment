@@ -226,6 +226,7 @@ async function runAssetTestSuite() {
         roomNumber: 'Room 101',
         assetId: createdAssetId,
         priority: 'High',
+        incidentTimestamp: new Date().toISOString(),
       }),
     });
 
@@ -267,6 +268,7 @@ async function runAssetTestSuite() {
         floor: '2nd Floor',
         roomNumber: 'Room 201',
         assetId: createdAssetId,
+        incidentTimestamp: new Date().toISOString(),
       }),
     });
 
@@ -469,6 +471,7 @@ async function runAssetTestSuite() {
         buildingName: 'Main Block',
         floor: '2nd Floor',
         roomNumber: 'Corridor',
+        incidentTimestamp: new Date().toISOString(),
         // No assetId provided
       }),
     });

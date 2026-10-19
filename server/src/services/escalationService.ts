@@ -1,6 +1,13 @@
 import { Complaint } from '../models/Complaint';
 
+let isEscalationRunning = false;
+
 export const checkAndEscalateComplaints = async (): Promise<{ escalatedCount: number }> => {
+  if (isEscalationRunning) {
+    return { escalatedCount: 0 };
+  }
+
+  isEscalationRunning = true;
   try {
     const now = new Date();
     
@@ -54,5 +61,7 @@ export const checkAndEscalateComplaints = async (): Promise<{ escalatedCount: nu
   } catch (error) {
     console.error('[Escalation Worker Error]:', error);
     return { escalatedCount: 0 };
+  } finally {
+    isEscalationRunning = false;
   }
 };

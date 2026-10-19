@@ -40,6 +40,7 @@ export interface ICategory {
   icon: string;
   defaultDepartment: string;
   defaultSLAHours: number;
+  subcategories?: string[];
 }
 
 export interface IDepartment {

@@ -65,7 +65,7 @@ export const getLifecycleAssessments = async (req: AuthRequest, res: Response): 
 export const getAssetLifecycle = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const summary = await getAssetLifecycleSummary(id);
+    const summary = await getAssetLifecycleSummary(id as string);
     res.status(200).json(summary);
   } catch (error: any) {
     res.status(error.message === 'Asset not found' ? 404 : 500).json({

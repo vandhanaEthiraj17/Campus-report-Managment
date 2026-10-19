@@ -837,6 +837,7 @@ async function runIntelligenceTestSuite() {
         floor: '1',
         roomNumber: 'Lab 101',
         priority: 'Medium',
+        incidentTimestamp: new Date().toISOString(),
         isAnonymous: false
       })
     });

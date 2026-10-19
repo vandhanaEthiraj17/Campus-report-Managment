@@ -6,6 +6,7 @@ export interface ICategory extends Document {
   icon: string;
   defaultDepartment: string;
   defaultSLAHours: number;
+  subcategories: string[];
 }
 
 const categorySchema = new Schema<ICategory>(
@@ -15,6 +16,7 @@ const categorySchema = new Schema<ICategory>(
     icon: { type: String, default: 'AlertCircle' },
     defaultDepartment: { type: String, required: true },
     defaultSLAHours: { type: Number, default: 24 },
+    subcategories: [{ type: String, trim: true }],
   },
   { timestamps: true }
 );

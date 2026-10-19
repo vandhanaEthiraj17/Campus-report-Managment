@@ -12,7 +12,21 @@ export interface AuthRequest extends Request {
   };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smart_campus_super_secret_key_2026';
+export const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction) {
+    if (!secret || secret === 'smart_campus_super_secret_key_2026' || secret.length < 32) {
+      throw new Error(
+        '[FATAL CONFIGURATION ERROR] In production mode, a strong, random JWT_SECRET of at least 32 characters must be supplied via environment variables.'
+      );
+    }
+    return secret;
+  }
+
+  return secret || 'smart_campus_super_secret_key_2026';
+};
 
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers['authorization'];
@@ -24,7 +38,8 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(token, secret) as {
       userId: string;
       email: string;
       role: UserRole;
@@ -89,7 +104,7 @@ export const generateToken = (user: {
       name: user.name,
       department: user.department,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: '7d' }
   );
 };

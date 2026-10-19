@@ -28,8 +28,8 @@ export interface IMaintenanceRecord extends Document {
   status: MaintenanceStatus;
   notes?: string;
   reminderSent: boolean;
-  createdBy?: Types.ObjectId;
-  updatedBy?: Types.ObjectId;
+  createdBy?: Types.ObjectId | string;
+  updatedBy?: Types.ObjectId | string;
   createdAt: Date;
   updatedAt: Date;
 }

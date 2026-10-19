@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Types } from 'mongoose';
 import { Complaint, ComplaintStatus, ComplaintPriority } from '../models/Complaint';
 import { Location } from '../models/Location';
 import { Category } from '../models/Category';
@@ -11,6 +12,11 @@ import {
   dispatchEmergencyAlert, 
   getEmergencyDispatchLogs 
 } from '../services/emergencyNotificationService';
+import {
+  emitComplaintCreated,
+  emitComplaintAssigned,
+  emitComplaintStatusChanged,
+} from '../services/socketService';
 
 // Helper to sanitize complaint data and strip PII if isAnonymous is true
 export const sanitizeComplaint = (doc: any, reqUser: any) => {
@@ -141,6 +147,8 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       title, 
       description, 
       categoryId, 
+      subcategory,
+      locationId,
       buildingName, 
       floor, 
       roomNumber, 
@@ -150,18 +158,43 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       voiceTranscription,
       assetId,
       assetCode,
+      incidentTimestamp,
     } = req.body;
 
-    if (!title || !description || !categoryId || !buildingName || !floor || !roomNumber) {
+    // Resolve location either by locationId or building/floor/room
+    let locationDoc: any = null;
+    if (locationId && Types.ObjectId.isValid(locationId)) {
+      locationDoc = await Location.findById(locationId);
+    }
+    if (!locationDoc && buildingName && floor && roomNumber) {
+      locationDoc = await Location.findOne({ buildingName, floor, roomNumber });
+      if (!locationDoc) {
+        locationDoc = await Location.create({ buildingName, floor, roomNumber });
+      }
+    } else if (!locationDoc && buildingName) {
+      locationDoc = await Location.findOne({ buildingName });
+    }
+
+    if (!incidentTimestamp) {
+      res.status(400).json({ message: 'Incident date and time is mandatory.' });
+      return;
+    }
+
+    const parsedIncidentDate = new Date(incidentTimestamp);
+    if (isNaN(parsedIncidentDate.getTime())) {
+      res.status(400).json({ message: 'Invalid incident date and time format.' });
+      return;
+    }
+
+    if (!title || !description || !categoryId || !locationDoc) {
       res.status(400).json({ message: 'All fields (title, description, category, location) are required.' });
       return;
     }
 
-    // Find or create location
-    let locationDoc = await Location.findOne({ buildingName, floor, roomNumber });
-    if (!locationDoc) {
-      locationDoc = await Location.create({ buildingName, floor, roomNumber });
-    }
+    const resolvedBuilding = locationDoc.buildingName || buildingName || locationDoc.zone || 'Campus Facilities';
+    const resolvedFloor = locationDoc.floor || floor || 'Ground Floor';
+    const resolvedRoom = locationDoc.roomNumber || roomNumber || locationDoc.name;
+    const resolvedFullPath = locationDoc.fullPath || `${resolvedBuilding} > ${resolvedFloor} > ${resolvedRoom}`;
 
     // Fetch category for SLA and assigned default department
     const categoryDoc = await Category.findById(categoryId);
@@ -235,13 +268,13 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       }
 
       // Verify asset location matches complaint location
-      const bMatch = linkedAsset.building.trim().toLowerCase() === buildingName.trim().toLowerCase();
-      const fMatch = linkedAsset.floor.trim().toLowerCase() === floor.trim().toLowerCase();
-      const rMatch = linkedAsset.room.trim().toLowerCase() === roomNumber.trim().toLowerCase();
+      const bMatch = !linkedAsset.building || linkedAsset.building.trim().toLowerCase() === resolvedBuilding.trim().toLowerCase();
+      const fMatch = !linkedAsset.floor || linkedAsset.floor.trim().toLowerCase() === resolvedFloor.trim().toLowerCase();
+      const rMatch = !linkedAsset.room || linkedAsset.room.trim().toLowerCase() === resolvedRoom.trim().toLowerCase();
 
       if (!bMatch || !fMatch || !rMatch) {
         res.status(400).json({
-          message: `Asset location mismatch: Asset '${linkedAsset.assetCode}' is located in ${linkedAsset.building}, ${linkedAsset.floor}, ${linkedAsset.room}, which does not match complaint location (${buildingName}, ${floor}, ${roomNumber}).`,
+          message: `Asset location mismatch: Asset '${linkedAsset.assetCode}' is located in ${linkedAsset.building}, ${linkedAsset.floor}, ${linkedAsset.room}, which does not match complaint location (${resolvedBuilding}, ${resolvedFloor}, ${resolvedRoom}).`,
         });
         return;
       }
@@ -260,8 +293,15 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       description: finalDescription,
       category: categoryId,
       categoryName: categoryDoc ? categoryDoc.name : 'General',
+      subcategory: subcategory ? String(subcategory).trim() : undefined,
       location: locationDoc._id,
-      locationDetails: { buildingName, floor, roomNumber },
+      locationPath: resolvedFullPath,
+      locationDetails: {
+        buildingName: resolvedBuilding,
+        floor: resolvedFloor,
+        roomNumber: resolvedRoom,
+      },
+      incidentTimestamp: parsedIncidentDate,
       reportedBy: req.user.userId,
       reporterUserId: req.user.userId,
       reportedByName: req.user.name,
@@ -309,6 +349,9 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
         console.error('Failed to dispatch emergency SMS notification:', smsErr);
       }
     }
+
+    // Real-time Socket.IO emission
+    emitComplaintCreated(newComplaint);
 
     const sanitized = sanitizeComplaint(newComplaint, req.user);
 
@@ -415,7 +458,12 @@ export const getComplaints = async (req: AuthRequest, res: Response): Promise<vo
 
 export const getComplaintById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
     const complaint = await Complaint.findById(id)
       .populate('category')
       .populate('location')
@@ -443,7 +491,12 @@ export const upvoteComplaint = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
     const complaint = await Complaint.findById(id);
 
     if (!complaint) {
@@ -478,7 +531,12 @@ export const assignComplaint = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
     const { department, staffId, priority } = req.body;
 
     const complaint = await Complaint.findById(id);
@@ -510,6 +568,7 @@ export const assignComplaint = async (req: AuthRequest, res: Response): Promise<
     });
 
     await complaint.save();
+    emitComplaintAssigned(complaint);
     res.status(200).json({ message: 'Complaint assigned successfully.', complaint });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error assigning complaint.' });
@@ -523,8 +582,41 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
+    if (req.user.role === 'STUDENT' || req.user.role === 'FACULTY') {
+      res.status(403).json({ message: 'Students and faculty are not authorized to update maintenance status directly.' });
+      return;
+    }
+
     const { status, remarks } = req.body;
+    const VALID_STATUSES: ComplaintStatus[] = [
+      'Reported', 'Assigned', 'Accepted', 'In Progress', 'Resolved', 'Verified', 'Closed', 'Escalated'
+    ];
+
+    if (!status || !VALID_STATUSES.includes(status as ComplaintStatus)) {
+      res.status(400).json({ message: `Invalid complaint status: ${status}` });
+      return;
+    }
+
+    if (req.user.role === 'STAFF') {
+      if (status === 'Closed' || status === 'Verified') {
+        res.status(403).json({ message: 'Technicians cannot verify or close tickets. Student reporter verification required.' });
+        return;
+      }
+      if (status === 'Resolved') {
+        res.status(400).json({ message: 'To mark a ticket as Resolved, submit work completion via the /resolve endpoint with photo evidence.' });
+        return;
+      }
+      if (!['Accepted', 'In Progress'].includes(status)) {
+        res.status(403).json({ message: `Staff cannot transition ticket to status '${status}'.` });
+        return;
+      }
+    }
 
     const complaint = await Complaint.findById(id);
     if (!complaint) {
@@ -548,6 +640,7 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     await complaint.save();
+    emitComplaintStatusChanged(complaint);
     res.status(200).json({ message: `Status updated to ${status}.`, complaint });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error updating status.' });
@@ -561,7 +654,12 @@ export const resolveComplaint = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
     const { afterImages, resolutionNotes } = req.body;
 
     if (!afterImages || afterImages.length === 0) {
@@ -588,6 +686,7 @@ export const resolveComplaint = async (req: AuthRequest, res: Response): Promise
     });
 
     await complaint.save();
+    emitComplaintStatusChanged(complaint);
     res.status(200).json({ message: 'Complaint marked as Resolved. Pending student verification.', complaint });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error resolving complaint.' });
@@ -601,7 +700,12 @@ export const verifyComplaint = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const { id } = req.params;
+    const id = String(req.params.id);
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'Invalid complaint ID format.' });
+      return;
+    }
+
     const { rating, comment, isSatisfied } = req.body;
 
     const complaint = await Complaint.findById(id);
@@ -635,13 +739,16 @@ export const verifyComplaint = async (req: AuthRequest, res: Response): Promise<
         remarks: `Student requested re-inspection: ${comment || 'Issue not completely resolved'}`,
       });
       await complaint.save();
+      emitComplaintStatusChanged(complaint);
       res.status(200).json({ message: 'Complaint re-opened for further maintenance.', complaint });
       return;
     }
 
+    const finalRating = rating !== undefined ? Math.max(1, Math.min(5, Math.round(Number(rating)) || 5)) : 5;
+
     complaint.status = 'Closed';
     complaint.feedback = {
-      rating: rating || 5,
+      rating: finalRating,
       comment: comment || 'Verified and closed.',
       submittedAt: new Date(),
     };
@@ -651,10 +758,11 @@ export const verifyComplaint = async (req: AuthRequest, res: Response): Promise<
       updatedBy: req.user.userId as any,
       updatedByName: req.user.name,
       timestamp: new Date(),
-      remarks: `Verified & Closed with ${rating || 5}-star rating`,
+      remarks: `Verified & Closed with ${finalRating}-star rating`,
     });
 
     await complaint.save();
+    emitComplaintStatusChanged(complaint);
     res.status(200).json({ message: 'Thank you! Complaint verified and closed successfully.', complaint });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Error verifying complaint.' });

@@ -4,6 +4,7 @@ import type { IComplaint, IRecommendation } from '../../types/index';
 import { ComplaintCard } from '../../components/complaints/ComplaintCard';
 import { ComplaintDetailModal } from '../../components/complaints/ComplaintDetailModal';
 import { useAuth } from '../../context/AuthContext';
+import { connectSocket } from '../../services/socket';
 import { Wrench, CheckCircle2, Layers, UserCheck, Brain, Check, X, Info } from 'lucide-react';
 
 export const StaffDashboard: React.FC = () => {
@@ -42,6 +43,25 @@ export const StaffDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchStaffTasks();
+  }, [filterType]);
+
+  // Real-time task dispatch updates via Socket.IO
+  useEffect(() => {
+    const socket = connectSocket();
+
+    const handleTaskUpdate = () => {
+      fetchStaffTasks();
+    };
+
+    socket.on('complaint:assigned', handleTaskUpdate);
+    socket.on('complaint:status_changed', handleTaskUpdate);
+    socket.on('complaint:created', handleTaskUpdate);
+
+    return () => {
+      socket.off('complaint:assigned', handleTaskUpdate);
+      socket.off('complaint:status_changed', handleTaskUpdate);
+      socket.off('complaint:created', handleTaskUpdate);
+    };
   }, [filterType]);
 
   const assignedList = complaints.filter((c) => c.status === 'Assigned' || c.status === 'Reported');

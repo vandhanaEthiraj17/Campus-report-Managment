@@ -8,6 +8,7 @@ router.use(authenticateToken);
 router.use(authorizeRoles('ADMIN'));
 
 router.get('/analytics/overview', getAnalyticsOverview);
+router.get('/analytics', getAnalyticsOverview);
 router.get('/users', getUsers);
 router.post('/users', createUser);
 router.patch('/users/:userId', updateUserRole);

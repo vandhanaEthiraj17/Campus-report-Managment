@@ -6,8 +6,8 @@ import { NewComplaintModal } from '../../components/complaints/NewComplaintModal
 import { ComplaintDetailModal } from '../../components/complaints/ComplaintDetailModal';
 import { StudentSidebar, type StudentNavView } from '../../components/common/StudentSidebar';
 import { StudentBottomNav } from '../../components/common/StudentBottomNav';
-import { RoleSwitcherDropdown } from '../../components/common/RoleSwitcherDropdown';
 import { useAuth } from '../../context/AuthContext';
+import { connectSocket } from '../../services/socket';
 import { 
   Plus, Search, Filter, AlertCircle, Clock, CheckCircle2, ShieldCheck, 
   Menu, Building2, Bell, Check, LogOut
@@ -51,6 +51,25 @@ export const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchComplaints();
+  }, [selectedStatus, selectedType]);
+
+  // Real-time live updates via Socket.IO
+  useEffect(() => {
+    const socket = connectSocket();
+
+    const handleUpdate = () => {
+      fetchComplaints();
+    };
+
+    socket.on('complaint:status_changed', handleUpdate);
+    socket.on('complaint:assigned', handleUpdate);
+    socket.on('complaint:created', handleUpdate);
+
+    return () => {
+      socket.off('complaint:status_changed', handleUpdate);
+      socket.off('complaint:assigned', handleUpdate);
+      socket.off('complaint:created', handleUpdate);
+    };
   }, [selectedStatus, selectedType]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -152,32 +171,6 @@ export const StudentDashboard: React.FC = () => {
                 smartcampus
               </span>
             </div>
-          </div>
-          <RoleSwitcherDropdown />
-        </header>
-
-        {/* Desktop Top Strip with Role Switcher & Identity */}
-        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white/70 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-20">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
-              Adhiyamaan College of Engineering
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="text-xs text-slate-500 font-medium">
-              Student Space Portal
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsNewModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Report Issue</span>
-            </button>
-            <RoleSwitcherDropdown />
           </div>
         </header>
 

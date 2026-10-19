@@ -7,7 +7,7 @@ export const RoleSwitcherDropdown: React.FC = () => {
   const { user, quickSwitchRole } = useAuth();
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
-  if (!user) return null;
+  if (!user || !import.meta.env.DEV) return null;
 
   const roleColors: Record<UserRole, string> = {
     STUDENT: 'bg-emerald-50 text-emerald-700 border-emerald-200',

@@ -33,12 +33,15 @@ export interface IComplaint extends Document {
   description: string;
   category: Types.ObjectId;
   categoryName?: string;
+  subcategory?: string;
   location: Types.ObjectId;
+  locationPath?: string;
   locationDetails?: {
     buildingName: string;
     floor: string;
     roomNumber: string;
   };
+  incidentTimestamp?: Date;
   reportedBy: Types.ObjectId;
   reporterUserId?: Types.ObjectId;
   reportedByName?: string;
@@ -80,7 +83,10 @@ const complaintSchema = new Schema<IComplaint>(
     description: { type: String, required: true, trim: true },
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
     categoryName: { type: String },
+    subcategory: { type: String, trim: true },
     location: { type: Schema.Types.ObjectId, ref: 'Location', required: true },
+    locationPath: { type: String, trim: true },
+    incidentTimestamp: { type: Date, default: Date.now },
     locationDetails: {
       buildingName: String,
       floor: String,
@@ -169,5 +175,6 @@ complaintSchema.index({ reporterUserId: 1 });
 complaintSchema.index({ isAnonymous: 1 });
 complaintSchema.index({ assignedStaff: 1 });
 complaintSchema.index({ asset: 1 });
+complaintSchema.index({ isEscalated: 1, slaDueDate: 1 });
 
 export const Complaint = model<IComplaint>('Complaint', complaintSchema);

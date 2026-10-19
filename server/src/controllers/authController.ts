@@ -220,8 +220,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       ],
     });
 
-    // 2. Shorthand role matching or domain completion
-    if (!user) {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // 2. Shorthand role matching or domain completion (Development/Demo mode only)
+    if (!user && !isProduction) {
       const lower = rawId.toLowerCase();
       if (lower === 'admin') {
         user = await User.findOne({ role: 'ADMIN' });
@@ -243,8 +245,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Special auto-provisioning for developer/creator account if not already in database
-    if (!user && (normalizedEmail.includes('vandhana') || rawId.toLowerCase().includes('vandhana'))) {
+    // Special auto-provisioning for developer/creator account in development mode only
+    if (!user && !isProduction && (normalizedEmail.includes('vandhana') || rawId.toLowerCase().includes('vandhana'))) {
       const salt = await bcrypt.genSalt(10);
       const newHash = await bcrypt.hash(password, salt);
       user = await User.create({
@@ -275,12 +277,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     let isMatch = await bcrypt.compare(password, user.passwordHash);
     
-    // Auto-sync password hash if standard default passwords (password123, admin123, admin) are used
-    if (!isMatch && (password === 'password123' || password === 'admin123' || password === 'admin' || user.email.includes('vandhana'))) {
-      const salt = await bcrypt.genSalt(10);
-      user.passwordHash = await bcrypt.hash(password, salt);
-      await user.save();
-      isMatch = true;
+    // Auto-sync password hash for seeded demo accounts in development mode only
+    if (!isMatch && !isProduction && (password === 'password123' || password === 'admin123' || password === 'admin')) {
+      const isDemoAccount = ['admin@campus.edu', 'vandhana@adhiyamaan.ac.in'].includes(user.email) || user.role === 'ADMIN' || user.role === 'STAFF';
+      if (isDemoAccount) {
+        const salt = await bcrypt.genSalt(10);
+        user.passwordHash = await bcrypt.hash(password, salt);
+        await user.save();
+        isMatch = true;
+      }
     }
 
     if (!isMatch) {
