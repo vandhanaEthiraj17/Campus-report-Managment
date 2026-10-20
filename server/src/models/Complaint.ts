@@ -36,6 +36,7 @@ export interface IComplaint extends Document {
   subcategory?: string;
   location: Types.ObjectId;
   locationPath?: string;
+  specificLocation?: string;
   locationDetails?: {
     buildingName: string;
     floor: string;
@@ -86,6 +87,7 @@ const complaintSchema = new Schema<IComplaint>(
     subcategory: { type: String, trim: true },
     location: { type: Schema.Types.ObjectId, ref: 'Location', required: true },
     locationPath: { type: String, trim: true },
+    specificLocation: { type: String, trim: true },
     incidentTimestamp: { type: Date, default: Date.now },
     locationDetails: {
       buildingName: String,

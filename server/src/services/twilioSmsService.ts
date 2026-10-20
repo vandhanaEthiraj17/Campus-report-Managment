@@ -45,6 +45,11 @@ export const normalizePhoneNumber = (phone: string): string => {
     return `+91${digits.slice(1)}`;
   }
 
+  // If 12 digits starting with 91, prepend +
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+${digits}`;
+  }
+
   return `+${digits}`;
 };
 

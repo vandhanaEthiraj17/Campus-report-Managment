@@ -1,12 +1,13 @@
 import { Department } from '../models/Department';
 import { User } from '../models/User';
+import { getSmsProvider, normalizePhoneNumber } from './twilioSmsService';
 
 export interface ISMSDispatchLog {
   id: string;
   ticketId: string;
   recipientPhone: string;
   recipientRole: string;
-  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'SIMULATED_DEV' | 'UNAVAILABLE_NO_GATEWAY';
+  status: 'DELIVERED' | 'SENT' | 'QUEUED' | 'FAILED' | 'SIMULATED_DEV' | 'UNAVAILABLE_NO_GATEWAY';
   carrierMessageId: string;
   messageText: string;
   sentAt: Date;
@@ -29,51 +30,34 @@ export const maskPhoneNumber = (phone: string): string => {
 
 /**
  * Returns configured emergency alert contact numbers
- * Defaults to the requested numbers: 99529112177, 6382373918
+ * Ensures both designated numbers (+919952912177 and +916382373918) are always included
  */
 export const getEmergencyContactNumbers = async (): Promise<{ phone: string; label: string }[]> => {
-  const envNumbers = (process.env.EMERGENCY_ALERT_NUMBERS || '99529112177,6382373918')
+  const envNumbers = (process.env.EMERGENCY_SMS_RECIPIENTS || process.env.EMERGENCY_ALERT_NUMBERS || '+919952912177,+916382373918')
     .split(',')
     .map((num) => num.trim())
     .filter(Boolean);
 
   const contacts: { phone: string; label: string }[] = [];
 
-  // Default designated numbers from requirements
-  if (envNumbers.includes('99529112177')) {
-    contacts.push({ phone: '99529112177', label: 'HOD / Women Safety Coordinator' });
-  }
-  if (envNumbers.includes('6382373918')) {
-    contacts.push({ phone: '6382373918', label: 'Campus Safety Coordinator / Staff' });
+  // Always ensure both designated numbers are present
+  const defaultDesignated = ['+919952912177', '+916382373918'];
+  for (const des of defaultDesignated) {
+    const norm = normalizePhoneNumber(des);
+    if (norm && !contacts.some((c) => c.phone === norm)) {
+      contacts.push({
+        phone: norm,
+        label: norm.endsWith('2177') ? 'HOD / Women Safety Coordinator' : 'Campus Safety Coordinator / Staff',
+      });
+    }
   }
 
   // Any other configured env numbers
   for (const num of envNumbers) {
-    if (!contacts.some((c) => c.phone === num)) {
-      contacts.push({ phone: num, label: 'Emergency Response Coordinator' });
+    const norm = normalizePhoneNumber(num);
+    if (norm && !contacts.some((c) => c.phone === norm)) {
+      contacts.push({ phone: norm, label: 'Designated Emergency Coordinator' });
     }
-  }
-
-  // Also dynamically pull Department head phones for Women Safety / Security if stored in DB
-  try {
-    const safetyDept = await Department.findOne({
-      $or: [
-        { code: 'SEC-WSC' },
-        { name: /women|safety|security/i },
-      ],
-    });
-
-    if (safetyDept && safetyDept.contactPhone) {
-      const sanitizedPhone = safetyDept.contactPhone.replace(/[^\d]/g, '');
-      if (sanitizedPhone && !contacts.some((c) => c.phone.endsWith(sanitizedPhone.slice(-10)))) {
-        contacts.push({
-          phone: safetyDept.contactPhone,
-          label: `${safetyDept.headName} (${safetyDept.name} Head)`,
-        });
-      }
-    }
-  } catch (err) {
-    // Graceful fallback if database query is not ready
   }
 
   return contacts;
@@ -81,6 +65,10 @@ export const getEmergencyContactNumbers = async (): Promise<{ phone: string; lab
 
 /**
  * Evaluates whether a complaint is classified as High Risk or Women Safety Emergency
+ * Distinguishes between:
+ * 1. Ordinary maintenance complaints (broken lights, fans, desks, plumbing) -> false
+ * 2. Urgent safety hazards (fire, electric shock, structural collapse, hazards) -> true
+ * 3. Explicit emergency / SOS incidents (Women Safety & SOS, assault, harassment) -> true
  */
 export const isHighRiskOrWomenSafety = (data: {
   title?: string;
@@ -88,26 +76,33 @@ export const isHighRiskOrWomenSafety = (data: {
   categoryName?: string;
   priority?: string;
 }): boolean => {
-  const text = `${data.title || ''} ${data.description || ''} ${data.categoryName || ''}`.toLowerCase();
+  const cat = (data.categoryName || '').toLowerCase();
+  const text = `${data.title || ''} ${data.description || ''} ${cat}`.toLowerCase();
   const priority = (data.priority || '').toLowerCase();
 
-  // 1. Explicit priority triggers
-  if (priority === 'urgent' || priority === 'high') {
+  // 1. Explicit SOS / Women Safety category triggers
+  if (cat.includes('women') || cat.includes('sos')) {
     return true;
   }
 
-  // 2. Women Safety triggers
-  const womenSafetyPattern = /\b(women|woman|girl|female|harass|harassment|eve.?teasing|stalk|stalking|molest|molestation|assault|ragging|threat|crying|unsafe)\b/i;
-  if (womenSafetyPattern.test(text)) {
+  const womenSafetyPattern = /\b(women|woman|girl|female|harass|harassment|eve.?teasing|stalk|stalking|molest|molestation|assault|ragging|threat|unsafe)\b/i;
+  if (womenSafetyPattern.test(text) && (priority === 'urgent' || priority === 'high')) {
     return true;
   }
 
-  // 3. General Emergency / Danger triggers
-  const emergencyPattern = /\b(emergency|fire|danger|spark|smoke|explosion|short.?circuit|gas.?leak|electric.?shock|hazard|sos|immediate.?help)\b/i;
-  if (emergencyPattern.test(text)) {
+  // 2. Urgent safety hazards
+  const isHazardCategory = cat.includes('hazard') || cat.includes('emergency') || cat.includes('safety incident');
+  if (isHazardCategory && priority === 'urgent') {
     return true;
   }
 
+  // 3. Catastrophic physical danger keywords with urgent priority
+  const criticalDangerPattern = /\b(fire|explosion|smoke|short.?circuit|electric.?shock|gas.?leak|collapse|electrocution)\b/i;
+  if (criticalDangerPattern.test(text) && priority === 'urgent') {
+    return true;
+  }
+
+  // Ordinary maintenance complaints do not trigger emergency SMS
   return false;
 };
 
@@ -120,53 +115,23 @@ export const sendSMSAlert = async (
   message: string,
   ticketId: string
 ): Promise<ISMSDispatchLog> => {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const hasExternalGateway = Boolean(process.env.TWILIO_ACCOUNT_SID || process.env.SMS_API_KEY);
+  const normalizedPhone = normalizePhoneNumber(recipientPhone);
+  const maskedPhone = maskPhoneNumber(normalizedPhone);
+  const smsProvider = getSmsProvider();
 
-  let status: ISMSDispatchLog['status'];
-  let carrierMessageId: string;
-  let notes: string;
-
-  if (hasExternalGateway) {
-    // If external cellular gateway keys are present, real dispatch is handled by gateway driver
-    carrierMessageId = `CARRIER-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    status = 'SENT';
-    notes = 'Dispatched via external SMS gateway driver.';
-  } else if (isProduction) {
-    // In production without SMS provider keys, transparently declare unavailable
-    carrierMessageId = 'NO_CELLULAR_GATEWAY_CONFIGURED';
-    status = 'UNAVAILABLE_NO_GATEWAY';
-    notes = 'Cellular SMS delivery requires external SMS telecom provider API configuration.';
-  } else {
-    // In development mode, simulate and record in dispatch history
-    carrierMessageId = `SIM-DEV-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    status = 'SIMULATED_DEV';
-    notes = 'Development simulation logged to terminal output. External cellular transmission unconfigured.';
-  }
-
-  const maskedPhone = maskPhoneNumber(recipientPhone);
-
-  console.log(`\n============================================================`);
-  console.log(`🚨 [EMERGENCY SMS DISPATCH AUDIT]`);
-  console.log(`📲 TO: ${maskedPhone} (${recipientLabel})`);
-  console.log(`🆔 STATUS: ${status} | REF: ${carrierMessageId}`);
-  console.log(`🎫 TICKET REF: ${ticketId}`);
-  console.log(`🕒 TIMESTAMP: ${new Date().toISOString()}`);
-  console.log(`ℹ️ NOTICE: ${notes}`);
-  console.log(`---------------- MESSAGE BODY ----------------`);
-  console.log(message);
-  console.log(`============================================================\n`);
+  // Dispatch via configured SMS provider (Twilio in production, MockSmsProvider in tests, Dev Simulator in dev)
+  const dispatchResult = await smsProvider.sendSms(normalizedPhone, message, ticketId);
 
   const logEntry: ISMSDispatchLog = {
-    id: carrierMessageId,
+    id: dispatchResult.messageId,
     ticketId,
     recipientPhone: maskedPhone,
     recipientRole: recipientLabel,
-    status,
-    carrierMessageId,
+    status: dispatchResult.status as any,
+    carrierMessageId: dispatchResult.carrierMessageId || dispatchResult.messageId,
     messageText: message,
-    sentAt: new Date(),
-    notes,
+    sentAt: dispatchResult.timestamp || new Date(),
+    notes: dispatchResult.notes || dispatchResult.error,
   };
 
   emergencyDispatchHistory.unshift(logEntry);
@@ -192,16 +157,7 @@ export const dispatchEmergencyAlert = async (
   const catName = categoryName || complaint.categoryName || 'Emergency / Women Safety';
   const locationStr = complaint.locationDetails
     ? `${complaint.locationDetails.buildingName}, ${complaint.locationDetails.floor}, ${complaint.locationDetails.roomNumber}`
-    : 'Campus Premises';
-
-  const reporterDisplay = complaint.isAnonymous
-    ? 'Anonymous Student (Identity Protected 🔒)'
-    : complaint.reportedByName || 'Campus Member';
-
-  const isWomenSafety = /women|girl|harass|assault|stalk/i.test(`${complaint.title} ${complaint.description} ${catName}`);
-  const alertHeader = isWomenSafety
-    ? '🚨 [WOMEN SAFETY EMERGENCY ALERT]'
-    : '🚨 [HIGH-RISK CAMPUS EMERGENCY ALERT]';
+    : (complaint.locationPath || 'Campus Premises');
 
   const formattedTime = new Date().toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
@@ -209,18 +165,14 @@ export const dispatchEmergencyAlert = async (
     timeStyle: 'short',
   });
 
+  // Standard concise emergency SMS template per requirement 3.C
   const alertMessage = 
-`${alertHeader}
-TICKET: ${complaint.ticketId}
-PRIORITY: ${complaint.priority || 'URGENT'}
-CATEGORY: ${catName}
-LOCATION: ${locationStr}
-ISSUE: ${complaint.title}
-REPORTER: ${reporterDisplay}
-TIME: ${formattedTime}
-
-ACTION REQUIRED: HOD, Coordinator & Safety Staff please dispatch immediate assistance!
-Web Portal: http://localhost:3000`;
+`SMARTCAMPUS EMERGENCY ALERT
+Incident: ${complaint.ticketId}
+Type: ${catName}
+Location: ${locationStr}
+Time: ${formattedTime}
+Please check the authorized SmartCampus emergency dashboard and respond according to campus emergency procedures.`;
 
   const contacts = await getEmergencyContactNumbers();
   const logs: ISMSDispatchLog[] = [];

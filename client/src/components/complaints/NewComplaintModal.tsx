@@ -86,6 +86,30 @@ const BUILDING_CATEGORY_RULES: Array<{
   { displayName: 'Other', match: /^others?$|^other$/i, fallbackMatch: /other/i, defaultSLA: 24, icon: 'HelpCircle' },
 ];
 
+// Campus Facility / Zone category configurations matching all campus facilities
+const CAMPUS_FACILITY_CATEGORY_RULES: Array<{
+  displayName: string;
+  match: RegExp;
+  fallbackMatch?: RegExp;
+  defaultSLA: number;
+  icon: string;
+  isSOS?: boolean;
+}> = [
+  { displayName: 'Women Safety & SOS', match: /women|sos/i, defaultSLA: 1, icon: 'ShieldAlert', isSOS: true },
+  { displayName: 'Bus & Transport Incidents', match: /bus|transport/i, defaultSLA: 6, icon: 'Bus' },
+  { displayName: 'Classroom Damage', match: /classroom damage|classroom|civil/i, defaultSLA: 48, icon: 'Building2' },
+  { displayName: 'Electrical Maintenance', match: /electrical maintenance|^electrical$/i, fallbackMatch: /electrical/i, defaultSLA: 12, icon: 'Zap' },
+  { displayName: 'Garbage & Overflow', match: /garbage & overflow|garbage|sanitation|clean/i, defaultSLA: 8, icon: 'Trash2' },
+  { displayName: 'Hostel Facilities', match: /hostel/i, defaultSLA: 12, icon: 'Home' },
+  { displayName: 'Internet / Wi-Fi', match: /wifi|network|internet/i, defaultSLA: 24, icon: 'Wifi' },
+  { displayName: 'Laboratory Equipment & Research', match: /lab/i, defaultSLA: 18, icon: 'FlaskConical' },
+  { displayName: 'Parking Issues', match: /parking|car/i, defaultSLA: 12, icon: 'Car' },
+  { displayName: 'Road & Subway Issues', match: /road|subway|pathway/i, defaultSLA: 18, icon: 'Footprints' },
+  { displayName: 'Safety Hazards', match: /safety hazards|hazard/i, defaultSLA: 4, icon: 'AlertTriangle', isSOS: true },
+  { displayName: 'Ground & Sports Facilities', match: /sport|ground|gym/i, defaultSLA: 24, icon: 'Trophy' },
+  { displayName: 'Water Supply & Plumbing', match: /water|plumbing|leak/i, defaultSLA: 12, icon: 'Droplets' },
+];
+
 interface DisplayCategory {
   _id: string;
   name: string;
@@ -103,16 +127,14 @@ interface NewComplaintModalProps {
 
 export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [categories, setCategories] = useState<ICategory[]>([]);
-  const [campusLocations, setCampusLocations] = useState<any[]>([]);
 
   // Form State
   const [locationMode, setLocationMode] = useState<'BUILDING' | 'CAMPUS_ZONE'>('BUILDING');
-  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [specificLocation, setSpecificLocation] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [floor, setFloor] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [subcategory, setSubcategory] = useState('');
   const [incidentTimestamp, setIncidentTimestamp] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -231,28 +253,28 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
   // Modern category icon resolution
   const getCategoryIcon = (name: string) => {
     const key = name.toLowerCase();
-    if (key.includes('women') || key.includes('sos')) return <ShieldAlert className="h-5 w-5 text-rose-600 animate-pulse" />;
-    if (key.includes('bus') || key.includes('transport')) return <Bus className="h-5 w-5 text-amber-500" />;
-    if (key.includes('park') || key.includes('car') || key.includes('security')) return <Car className="h-5 w-5 text-blue-500" />;
-    if (key.includes('hostel')) return <Home className="h-5 w-5 text-emerald-500" />;
-    if (key.includes('road') || key.includes('subway') || key.includes('path')) return <Footprints className="h-5 w-5 text-orange-500" />;
-    if (key.includes('sport') || key.includes('ground') || key.includes('gym')) return <Trophy className="h-5 w-5 text-yellow-500" />;
-    if (key.includes('lab')) return <FlaskConical className="h-5 w-5 text-purple-500" />;
-    if (key.includes('light')) return <Zap className="h-5 w-5 text-amber-400" />;
-    if (key.includes('fan')) return <Fan className="h-5 w-5 text-blue-400" />;
-    if (key.includes('water') || key.includes('leak') || key.includes('plumb')) return <Droplets className="h-5 w-5 text-cyan-400" />;
-    if (key.includes('washroom') || key.includes('toilet') || key.includes('restroom')) return <Bath className="h-5 w-5 text-teal-400" />;
-    if (key.includes('clean') || key.includes('sanitation') || key.includes('garbage')) return <Trash2 className="h-5 w-5 text-emerald-400" />;
-    if (key.includes('bench') || key.includes('desk')) return <Armchair className="h-5 w-5 text-purple-400" />;
-    if (key.includes('classroom') || key.includes('civil')) return <Building2 className="h-5 w-5 text-indigo-400" />;
-    if (key.includes('canteen') || key.includes('food')) return <Utensils className="h-5 w-5 text-orange-400" />;
-    if (key.includes('projector') || key.includes('av')) return <Tv className="h-5 w-5 text-rose-400" />;
-    if (key.includes('wifi') || key.includes('network') || key.includes('internet')) return <Wifi className="h-5 w-5 text-sky-400" />;
-    if (key.includes('hazard')) return <AlertTriangle className="h-5 w-5 text-rose-500" />;
-    if (key.includes('emergency')) return <ShieldAlert className="h-5 w-5 text-rose-600" />;
-    if (key.includes('electrical')) return <Zap className="h-5 w-5 text-amber-500" />;
-    if (key.includes('other')) return <HelpCircle className="h-5 w-5 text-indigo-500" />;
-    return <AlertCircle className="h-5 w-5 text-slate-400" />;
+    if (key.includes('women') || key.includes('sos')) return <ShieldAlert className="h-4.5 w-4.5 text-rose-600 animate-pulse shrink-0" />;
+    if (key.includes('bus') || key.includes('transport')) return <Bus className="h-4.5 w-4.5 text-amber-500 shrink-0" />;
+    if (key.includes('park') || key.includes('car') || key.includes('security')) return <Car className="h-4.5 w-4.5 text-blue-500 shrink-0" />;
+    if (key.includes('hostel')) return <Home className="h-4.5 w-4.5 text-emerald-500 shrink-0" />;
+    if (key.includes('road') || key.includes('subway') || key.includes('path')) return <Footprints className="h-4.5 w-4.5 text-orange-500 shrink-0" />;
+    if (key.includes('sport') || key.includes('ground') || key.includes('gym')) return <Trophy className="h-4.5 w-4.5 text-yellow-500 shrink-0" />;
+    if (key.includes('lab')) return <FlaskConical className="h-4.5 w-4.5 text-purple-500 shrink-0" />;
+    if (key.includes('light')) return <Zap className="h-4.5 w-4.5 text-amber-400 shrink-0" />;
+    if (key.includes('fan')) return <Fan className="h-4.5 w-4.5 text-blue-400 shrink-0" />;
+    if (key.includes('water') || key.includes('leak') || key.includes('plumb')) return <Droplets className="h-4.5 w-4.5 text-cyan-400 shrink-0" />;
+    if (key.includes('washroom') || key.includes('toilet') || key.includes('restroom')) return <Bath className="h-4.5 w-4.5 text-teal-400 shrink-0" />;
+    if (key.includes('clean') || key.includes('sanitation') || key.includes('garbage')) return <Trash2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" />;
+    if (key.includes('bench') || key.includes('desk')) return <Armchair className="h-4.5 w-4.5 text-purple-400 shrink-0" />;
+    if (key.includes('classroom') || key.includes('civil')) return <Building2 className="h-4.5 w-4.5 text-indigo-400 shrink-0" />;
+    if (key.includes('canteen') || key.includes('food')) return <Utensils className="h-4.5 w-4.5 text-orange-400 shrink-0" />;
+    if (key.includes('projector') || key.includes('av')) return <Tv className="h-4.5 w-4.5 text-rose-400 shrink-0" />;
+    if (key.includes('wifi') || key.includes('network') || key.includes('internet')) return <Wifi className="h-4.5 w-4.5 text-sky-400 shrink-0" />;
+    if (key.includes('hazard')) return <AlertTriangle className="h-4.5 w-4.5 text-rose-500 shrink-0" />;
+    if (key.includes('emergency')) return <ShieldAlert className="h-4.5 w-4.5 text-rose-600 shrink-0" />;
+    if (key.includes('electrical')) return <Zap className="h-4.5 w-4.5 text-amber-500 shrink-0" />;
+    if (key.includes('other')) return <HelpCircle className="h-4.5 w-4.5 text-indigo-500 shrink-0" />;
+    return <AlertCircle className="h-4.5 w-4.5 text-slate-400 shrink-0" />;
   };
 
   // Fetch master data on open
@@ -261,16 +283,9 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
     const fetchMasterData = async () => {
       try {
-        const [catRes, locRes] = await Promise.all([
-          api.get('/categories'),
-          api.get('/locations?limit=200').catch(() => ({ data: { success: false, data: { locations: [] } } }))
-        ]);
+        const catRes = await api.get('/categories');
         const cats: ICategory[] = catRes.data.categories || [];
         setCategories(cats);
-
-        if (locRes.data?.success && locRes.data.data?.locations) {
-          setCampusLocations(locRes.data.data.locations);
-        }
       } catch (err) {
         console.error('Failed to load master data for complaint modal', err);
       }
@@ -312,40 +327,55 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     });
   }, [categories]);
 
-  const buildingCatIdSet = useMemo(() => {
-    return new Set(buildingCategories.map((c) => c._id));
-  }, [buildingCategories]);
-
-  // Section 4: All remaining campus facility, transport, and outdoor categories
+  // Section 4: Campus facility categories ensuring all required campus facilities are always available
   const campusFacilityCategories: DisplayCategory[] = useMemo(() => {
-    const remaining = categories.filter((c) => !buildingCatIdSet.has(c._id));
+    const matchedCategoryIds = new Set<string>();
 
-    const mapCampusLabel = (rawName: string): string => {
-      if (/women|sos/i.test(rawName)) return 'Women Safety & SOS';
-      if (/bus|transport/i.test(rawName)) return 'Bus & Transport Incidents';
-      if (/parking|security/i.test(rawName)) return 'Parking Issues';
-      if (/hostel/i.test(rawName)) return 'Hostel Facilities';
-      if (/road|subway|pathway/i.test(rawName)) return 'Road & Subway Issues';
-      if (/sport|ground|gym/i.test(rawName)) return 'Ground & Sports Facilities';
-      if (/garden|outdoor/i.test(rawName)) return 'Garden & Outdoor Maintenance';
-      if (/util/i.test(rawName)) return 'Campus-Wide Utilities';
-      return rawName;
-    };
+    const mapped: DisplayCategory[] = CAMPUS_FACILITY_CATEGORY_RULES.map((rule) => {
+      let matched = categories.find((c) => !matchedCategoryIds.has(c._id) && rule.match.test(c.name));
+      if (!matched && rule.fallbackMatch) {
+        matched = categories.find((c) => !matchedCategoryIds.has(c._id) && rule.fallbackMatch!.test(c.name));
+      }
 
-    const mapped: DisplayCategory[] = remaining.map((c) => ({
+      if (matched) {
+        matchedCategoryIds.add(matched._id);
+        return {
+          _id: matched._id,
+          name: rule.displayName,
+          originalName: matched.name,
+          defaultSLAHours: matched.defaultSLAHours || rule.defaultSLA,
+          subcategories: matched.subcategories || [],
+          isSOS: rule.isSOS || false,
+        };
+      }
+
+      // Safe fallback ensuring category tile is immediately selectable
+      return {
+        _id: `facility_${rule.displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        name: rule.displayName,
+        originalName: rule.displayName,
+        defaultSLAHours: rule.defaultSLA,
+        subcategories: [],
+        isSOS: rule.isSOS || false,
+      };
+    });
+
+    // Also include any extra custom categories from the backend database
+    const extra = categories.filter((c) => !matchedCategoryIds.has(c._id));
+    const extraMapped: DisplayCategory[] = extra.map((c) => ({
       _id: c._id,
-      name: mapCampusLabel(c.name),
+      name: c.name,
       originalName: c.name,
       defaultSLAHours: c.defaultSLAHours || 12,
       subcategories: c.subcategories || [],
       isSOS: /women|sos|emergency/i.test(c.name),
     }));
 
-    // Ensure Women Safety & SOS is prominently placed first
-    const sosList = mapped.filter((c) => c.isSOS);
-    const nonSosList = mapped.filter((c) => !c.isSOS);
+    const fullList = [...mapped, ...extraMapped];
+    const sosList = fullList.filter((c) => c.isSOS);
+    const nonSosList = fullList.filter((c) => !c.isSOS);
     return [...sosList, ...nonSosList];
-  }, [categories, buildingCatIdSet]);
+  }, [categories]);
 
   const activeCategories = locationMode === 'BUILDING' ? buildingCategories : campusFacilityCategories;
 
@@ -354,10 +384,9 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     if (mode === locationMode) return;
     setLocationMode(mode);
     setCategoryId('');
-    setSubcategory('');
     setErrorMsg('');
     if (mode === 'BUILDING') {
-      setSelectedLocationId('');
+      setSpecificLocation('');
     } else {
       setBuildingName('');
       setFloor('');
@@ -407,12 +436,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
 
     if (locationMode === 'BUILDING') {
       if (!buildingName.trim() || !floor.trim() || !roomNumber.trim()) {
-        setErrorMsg('Please select a Building, Floor, and enter a Room / Specific Spot.');
-        return;
-      }
-    } else {
-      if (!selectedLocationId) {
-        setErrorMsg('Please select a Campus Facility / Zone from the list.');
+        setErrorMsg('Please select a Building, enter a Floor, and enter a Room / Specific Spot.');
         return;
       }
     }
@@ -449,23 +473,24 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
     try {
       let payload: any;
       if (locationMode === 'CAMPUS_ZONE') {
-        const selectedLoc = campusLocations.find((l) => l._id === selectedLocationId);
-        const effBuilding = selectedLoc ? (selectedLoc.buildingName || selectedLoc.name) : 'Campus Facility';
-        const effFloor = selectedLoc ? (selectedLoc.floor || 'G') : 'Ground Floor';
-        const effRoom = selectedLoc ? (selectedLoc.roomNumber || selectedLoc.name) : 'General Area';
-        const effPath = selectedLoc ? (selectedLoc.fullPath || selectedLoc.name) : effBuilding;
+        const specLoc = specificLocation.trim();
+        const selectedCat = categories.find((c) => c._id === categoryId);
+        const catName = selectedCat ? selectedCat.name : 'Campus Facility';
+        const effBuilding = 'Campus Facility / Zone';
+        const effFloor = 'N/A';
+        const effRoom = specLoc || catName || 'Campus Premises';
+        const effPath = specLoc ? `Campus Facility > ${specLoc}` : `Campus Facility > ${catName}`;
 
         payload = {
           title: title.trim(),
           description: description.trim(),
           categoryId,
-          subcategory: subcategory || undefined,
           incidentTimestamp: parsedDate.toISOString(),
-          locationId: selectedLocationId,
           locationPath: effPath,
           buildingName: effBuilding,
           floor: effFloor,
           roomNumber: effRoom,
+          specificLocation: specLoc || undefined,
           priority,
           beforeImages: beforeImages.length > 0 ? beforeImages : [
             'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'
@@ -483,7 +508,6 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
           title: title.trim(),
           description: description.trim(),
           categoryId,
-          subcategory: subcategory || undefined,
           incidentTimestamp: parsedDate.toISOString(),
           locationPath: effPath,
           buildingName: effBuilding,
@@ -504,12 +528,11 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
       onSuccess();
       onClose();
       setIsAnonymous(false);
-      setSelectedLocationId('');
+      setSpecificLocation('');
       setBuildingName('');
       setFloor('');
       setRoomNumber('');
       setCategoryId('');
-      setSubcategory('');
       setIncidentTimestamp('');
       setTitle('');
       setDescription('');
@@ -524,26 +547,25 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
   if (!isOpen) return null;
 
   const buildings = Object.keys(PREDEFINED_LOCATIONS);
-  const floors = buildingName ? Object.keys(PREDEFINED_LOCATIONS[buildingName] || {}) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="glass-card rounded-2xl border border-slate-200 w-full max-w-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div className="glass-card rounded-2xl border border-slate-200 w-full max-w-4xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-4 sm:my-6">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/90">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center">
-              <AlertCircle className="h-5 w-5" />
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200 bg-slate-50/90">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="h-8.5 w-8.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center">
+              <AlertCircle className="h-4.5 w-4.5" />
             </div>
             <div>
-              <h2 className="font-bold text-lg text-slate-800 font-outfit">Report Campus Issue</h2>
-              <p className="text-xs text-slate-500 font-medium">Fill in details to dispatch maintenance staff</p>
+              <h2 className="font-bold text-base sm:text-lg text-slate-800 font-outfit">Report Campus Issue</h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">Fill in details to dispatch maintenance staff</p>
             </div>
           </div>
           <button 
             type="button"
             onClick={() => { stopCamera(); onClose(); }} 
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition"
             aria-label="Close modal"
           >
             <X className="h-5 w-5" />
@@ -551,7 +573,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[82vh] overflow-y-auto">
           {errorMsg && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs flex items-center gap-2 font-medium">
               <AlertCircle className="h-4 w-4" />
@@ -594,28 +616,17 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
             </div>
 
             {locationMode === 'CAMPUS_ZONE' ? (
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                <label className="text-[11px] font-semibold text-slate-600 block">
-                  Select Facility (Bus, Main Gate, Sports Grounds, Roads, Hostels, Canteens, Utilities)
+              <div>
+                <label className="text-[11px] text-slate-500 font-semibold block mb-1">
+                  Specific location (optional)
                 </label>
-                <select
-                  value={selectedLocationId}
-                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                <input
+                  type="text"
+                  value={specificLocation}
+                  onChange={(e) => setSpecificLocation(e.target.value)}
+                  placeholder="e.g., Main Gate, Bus No. 12, Hostel Block A, Parking Area"
                   className="w-full glass-input rounded-xl px-3 py-2 text-xs"
-                  required
-                >
-                  <option value="">-- Choose from {campusLocations.length} Campus Facilities & Zones --</option>
-                  {campusLocations.map((loc) => (
-                    <option key={loc._id} value={loc._id}>
-                      [{loc.code}] {loc.name} {loc.zone ? `(${loc.zone})` : ''} - {loc.locationType.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-                {selectedLocationId && (
-                  <p className="text-[11px] text-emerald-600 font-medium">
-                    ✓ Location mapped: {campusLocations.find((l) => l._id === selectedLocationId)?.fullPath || campusLocations.find((l) => l._id === selectedLocationId)?.name}
-                  </p>
-                )}
+                />
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -626,8 +637,6 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                     value={buildingName}
                     onChange={(e) => {
                       setBuildingName(e.target.value);
-                      setFloor('');
-                      setRoomNumber('');
                     }}
                     className="w-full glass-input rounded-xl px-3 py-2 text-xs"
                     required
@@ -639,23 +648,17 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                   </select>
                 </div>
 
-                {/* Floor Dropdown */}
+                {/* Floor: Replaced with normal text input field */}
                 <div>
                   <span className="text-[11px] text-slate-500 font-semibold block mb-1">Floor</span>
-                  <select
+                  <input
+                    type="text"
                     value={floor}
-                    onChange={(e) => {
-                      setFloor(e.target.value);
-                    }}
-                    disabled={!buildingName}
-                    className="w-full glass-input rounded-xl px-3 py-2 text-xs disabled:opacity-50"
+                    onChange={(e) => setFloor(e.target.value)}
+                    placeholder="Enter floor (e.g., Ground Floor, First Floor, 2nd Floor)"
+                    className="w-full glass-input rounded-xl px-3 py-2 text-xs"
                     required
-                  >
-                    <option value="" className="bg-white text-slate-800">Select Floor...</option>
-                    {floors.map((f) => (
-                      <option key={f} value={f} className="bg-white text-slate-800">{f}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 {/* Room / Specific Spot: Replaced with normal text input field */}
@@ -714,8 +717,8 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
             </div>
           ) : null}
 
-          {/* Category Selection Grid */}
-          <div className="space-y-3">
+          {/* Category Selection Grid - 5 columns on desktop, responsive, compact cards */}
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-slate-650 flex items-center gap-1.5 uppercase tracking-wider">
                 2. Select Issue Category
@@ -725,7 +728,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5">
               {activeCategories.map((cat) => {
                 const isSelected = categoryId === cat._id;
                 const isSOS = cat.isSOS;
@@ -742,63 +745,38 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                         if (!title) setTitle(`${cat.name} issue in ${roomNumber || 'room'}`);
                       }
                     }}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                    className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[80px] sm:min-h-[84px] ${
                       isSelected
                         ? isSOS
-                          ? 'bg-rose-50 border-rose-500 text-slate-800 shadow-md ring-2 ring-rose-500/30'
-                          : 'bg-blue-50 border-blue-400 text-slate-800 shadow-md ring-2 ring-blue-500/20'
+                          ? 'bg-rose-50 border-rose-500 text-slate-900 shadow-sm ring-2 ring-rose-500/30'
+                          : 'bg-blue-50 border-blue-500 text-slate-900 shadow-sm ring-2 ring-blue-500/20'
                         : isSOS
                         ? 'bg-rose-50/60 border-rose-200 text-rose-900 hover:border-rose-400'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-350 hover:text-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-650 hover:border-slate-350 hover:text-slate-800 hover:bg-white'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                       {getCategoryIcon(cat.name)}
                       {isSelected ? (
-                        <Check className={`h-4 w-4 ${isSOS ? 'text-rose-600' : 'text-blue-600'}`} />
+                        <Check className={`h-3.5 w-3.5 ${isSOS ? 'text-rose-600' : 'text-blue-600'}`} />
                       ) : isSOS ? (
-                        <span className="text-[9px] font-extrabold uppercase bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">
+                        <span className="text-[8.5px] font-extrabold uppercase bg-rose-200 text-rose-800 px-1 py-0.5 rounded leading-none">
                           SOS
                         </span>
                       ) : null}
                     </div>
                     <div>
-                      <p className={`text-xs font-bold leading-tight ${isSOS ? 'text-rose-900' : ''}`}>{cat.name}</p>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-1">{cat.defaultSLAHours}h SLA</p>
+                      <p className={`text-[11px] sm:text-xs font-bold leading-tight line-clamp-2 ${isSOS ? 'text-rose-900' : 'text-slate-800'}`}>
+                        {cat.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                        {cat.defaultSLAHours}h SLA
+                      </p>
                     </div>
                   </button>
                 );
               })}
             </div>
-
-            {/* Subcategory Selector when available */}
-            {(() => {
-              const selectedCat = activeCategories.find((c) => c._id === categoryId);
-              if (!selectedCat?.subcategories || selectedCat.subcategories.length === 0) return null;
-              return (
-                <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                  <label className="text-[11px] font-semibold text-slate-650 block">
-                    Select Specific Subcategory (Optional)
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedCat.subcategories.map((sub) => (
-                      <button
-                        key={sub}
-                        type="button"
-                        onClick={() => setSubcategory(subcategory === sub ? '' : sub)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
-                          subcategory === sub
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                            : 'bg-white text-slate-650 border-slate-200 hover:border-slate-350'
-                        }`}
-                      >
-                        {sub}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
           </div>
 
           {/* HIGH-RISK / WOMEN SAFETY EMERGENCY MOBILE NOTIFICATION BANNER */}
@@ -818,7 +796,7 @@ export const NewComplaintModal: React.FC<NewComplaintModalProps> = ({ isOpen, on
                       </span>
                     </div>
                     <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
-                      Submitting this high-risk issue will automatically dispatch instant mobile SMS alerts with exact location details to the <strong>HOD & Safety Coordinators</strong> at <strong>99529112177</strong> and <strong>6382373918</strong> for rapid intervention.
+                      Submitting this high-risk issue will automatically dispatch instant mobile SMS alerts with exact location details to the <strong>HOD & Safety Coordinators</strong> at <strong>9952912177</strong> and <strong>6382373918</strong> for rapid intervention.
                     </p>
                   </div>
                 </div>

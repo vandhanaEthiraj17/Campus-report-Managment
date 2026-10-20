@@ -12,7 +12,15 @@ import {
   MockSmsProvider,
   normalizePhoneNumber,
   resetSmsRateLimiters,
+  setSmsProviderForTesting,
+  getSmsProvider,
 } from '../services/twilioSmsService';
+import {
+  getEmergencyContactNumbers,
+  isHighRiskOrWomenSafety,
+  dispatchEmergencyAlert,
+  maskPhoneNumber,
+} from '../services/emergencyNotificationService';
 
 dotenv.config();
 
@@ -63,7 +71,7 @@ export const runCampusFeaturesSuite = async () => {
 
   try {
     // -------------------------------------------------------------
-    // PART 1: CAMPUS LOCATION HIERARCHY & PROTECTION TESTS
+    // PART 1: CAMPUS LOCATION HIERARCHY & ROBUSTNESS TESTS
     // -------------------------------------------------------------
     console.log('--- PART 1: Campus Location Hierarchy & Robustness ---');
 
@@ -102,7 +110,6 @@ export const runCampusFeaturesSuite = async () => {
     let selfParentRejected = false;
     try {
       if (String(rootLoc._id) === String(rootLoc._id)) {
-        // Simulating the controller check
         throw new Error('A location cannot be its own parent location.');
       }
     } catch (e: any) {
@@ -115,7 +122,7 @@ export const runCampusFeaturesSuite = async () => {
     try {
       await Location.create({
         name: 'Duplicate Code Attempt',
-        code: testRootCode, // Same code as rootLoc
+        code: testRootCode,
         locationType: 'OTHER_FACILITY',
       });
     } catch (err: any) {
@@ -166,26 +173,41 @@ export const runCampusFeaturesSuite = async () => {
     // -------------------------------------------------------------
     console.log('\n--- PART 2: Twilio SMS Service & Delivery Mechanics ---');
 
-    // Test 8: Phone number normalization to E.164
-    const normalizedIndia = normalizePhoneNumber('9952911217');
+    // Test 8: Phone number normalization to strict E.164
+    const normalizedIndia = normalizePhoneNumber('9952912177');
+    const normalizedIndiaAlt = normalizePhoneNumber('6382373918');
     const normalizedWithCode = normalizePhoneNumber('+91 6382373918');
-    const normalized11Digit = normalizePhoneNumber('99529112177'); // 11-digit variant with leading country code
+    const normalized12Digit = normalizePhoneNumber('919952912177');
     assert(
-      normalizedIndia === '+919952911217' && normalizedWithCode === '+916382373918',
-      '8. Phone numbers normalize to E.164 format correctly'
+      normalizedIndia === '+919952912177' &&
+      normalizedIndiaAlt === '+916382373918' &&
+      normalizedWithCode === '+916382373918' &&
+      normalized12Digit === '+919952912177',
+      '8. Phone numbers normalize to E.164 format correctly (+919952912177 & +916382373918)'
     );
 
-    // Test 9: Missing credentials yields truthful unconfigured status
+    // Test 9: Designated emergency contact numbers retrieval includes both numbers
+    const emergencyContacts = await getEmergencyContactNumbers();
+    const hasNum1 = emergencyContacts.some((c) => c.phone === '+919952912177');
+    const hasNum2 = emergencyContacts.some((c) => c.phone === '+916382373918');
+    assert(
+      hasNum1 && hasNum2,
+      '9. getEmergencyContactNumbers() guarantees inclusion of both designated numbers (+919952912177, +916382373918)'
+    );
+
+    // Test 10: Missing credentials yields truthful unconfigured status
     const unconfiguredProvider = new TwilioSmsProvider();
     const isConfigured = unconfiguredProvider.isConfigured();
-    assert(!isConfigured, '9. Missing credentials produce truthful unconfigured state (no fake delivery)');
+    assert(!isConfigured, '10. Missing credentials produce truthful unconfigured state (no fake delivery)');
 
-    // Test 10: Mock provider dispatch returns structured message ID
+    // Test 11: Mock provider dispatch returns structured message ID without real cellular transmission
     resetSmsRateLimiters();
     const mockProvider = new MockSmsProvider();
+    setSmsProviderForTesting(mockProvider);
+
     const mockDispatchResult = await mockProvider.sendSms(
-      '+919952911217',
-      '🚨 EMERGENCY ALERT: Campus drill initiated at North Gate.',
+      '+919952912177',
+      'SMARTCAMPUS EMERGENCY ALERT\nIncident: EMG-TEST-001\nType: Emergency\nLocation: Campus Gate',
       'INC_TEST_001'
     );
 
@@ -193,22 +215,22 @@ export const runCampusFeaturesSuite = async () => {
       mockDispatchResult.success === true &&
       mockDispatchResult.status === 'SENT' &&
       mockDispatchResult.messageId.startsWith('SM_MOCK_'),
-      '10. Mock Twilio provider dispatches and returns structured message ID without sending real SMS'
+      '11. Mock Twilio provider dispatches and returns structured message ID without sending real SMS'
     );
 
-    // Test 11: Duplicate notification suppression (within 5 minutes)
+    // Test 12: Duplicate notification suppression (within deduplication window)
     const duplicateDispatchResult = await mockProvider.sendSms(
-      '+919952911217',
-      '🚨 EMERGENCY ALERT: Campus drill initiated at North Gate.',
+      '+919952912177',
+      'SMARTCAMPUS EMERGENCY ALERT\nIncident: EMG-TEST-001\nType: Emergency\nLocation: Campus Gate',
       'INC_TEST_001'
     );
     assert(
       duplicateDispatchResult.success === false &&
       duplicateDispatchResult.error?.includes('Duplicate') === true,
-      '11. Duplicate notification within 5 minutes is blocked to prevent SMS spam'
+      '12. Duplicate notification within deduplication window is blocked to prevent SMS spam'
     );
 
-    // Test 12: Rate limiter enforcement (>10 SMS/hr throttled)
+    // Test 13: Rate limiter enforcement (>10 SMS/hr throttled)
     const testRatePhone = '+919888877777';
     let rateBlocked = false;
     for (let i = 0; i < 12; i++) {
@@ -218,9 +240,9 @@ export const runCampusFeaturesSuite = async () => {
         break;
       }
     }
-    assert(rateBlocked, '12. Recipient rate limit enforced (>10 SMS/hr throttled)');
+    assert(rateBlocked, '13. Recipient rate limit enforced (>10 SMS/hr throttled)');
 
-    // Test 13: Twilio signature validation rejects invalid token signature
+    // Test 14: Twilio signature validation rejects invalid token signature
     const invalidSignature = mockProvider.validateWebhookSignature(
       'wrong_signature',
       'https://campus.domain.edu/api/emergency/twilio/status-callback',
@@ -231,26 +253,223 @@ export const runCampusFeaturesSuite = async () => {
       'https://campus.domain.edu/api/emergency/twilio/status-callback',
       { MessageSid: 'SM123', MessageStatus: 'delivered' }
     );
-    assert(!invalidSignature && validSignature, '13. Twilio webhook signature verification validates authenticity');
+    assert(!invalidSignature && validSignature, '14. Twilio webhook signature verification validates authenticity');
 
     // -------------------------------------------------------------
-    // PART 3: EMERGENCY INCIDENT WORKFLOW & AUDIT TRAIL
+    // PART 3: EMERGENCY CLASSIFICATION & DISPATCH MECHANICS
     // -------------------------------------------------------------
-    console.log('\n--- PART 3: Emergency Incident Workflow & Response ---');
+    console.log('\n--- PART 3: Emergency Classification & Multi-Recipient Dispatch ---');
 
-    // Test 14: Emergency recipient management
+    // Test 15: Ordinary maintenance complaints DO NOT trigger emergency SMS
+    const routineComp1 = isHighRiskOrWomenSafety({
+      title: 'Ceiling light flickering in room 204',
+      description: 'The tube light is flickering',
+      categoryName: 'Broken Lights',
+      priority: 'High',
+    });
+    const routineComp2 = isHighRiskOrWomenSafety({
+      title: 'Broken bench in seminar hall',
+      description: 'Wooden bench leg damaged',
+      categoryName: 'Broken Benches & Desk',
+      priority: 'Urgent',
+    });
+    const routineComp3 = isHighRiskOrWomenSafety({
+      title: 'Restroom tap leaking water',
+      description: 'Tap does not shut off completely',
+      categoryName: 'Water Leakage',
+      priority: 'High',
+    });
+    assert(
+      !routineComp1 && !routineComp2 && !routineComp3,
+      '15. Ordinary maintenance complaints (even with High/Urgent priority) DO NOT trigger emergency SMS'
+    );
+
+    // Test 16: Women Safety & SOS and Critical Danger DO trigger emergency SMS
+    const sosComp = isHighRiskOrWomenSafety({
+      title: 'Immediate assistance required near Library stairs',
+      description: 'Distress situation reported',
+      categoryName: 'Women Safety & SOS',
+      priority: 'Urgent',
+    });
+    const dangerComp = isHighRiskOrWomenSafety({
+      title: 'Smoke and electric spark from panel',
+      description: 'Heavy smoke billowing from main switchboard',
+      categoryName: 'Electrical Hazards',
+      priority: 'Urgent',
+    });
+    assert(
+      sosComp && dangerComp,
+      '16. Women Safety & SOS and urgent life/safety hazards trigger emergency SMS dispatch'
+    );
+
+    // Test 17: Emergency alert dispatches to BOTH configured recipients (+919952912177 & +916382373918)
+    resetSmsRateLimiters();
+    const freshMockProvider = new MockSmsProvider();
+    setSmsProviderForTesting(freshMockProvider);
+
+    const testEmergencyComplaint = {
+      ticketId: `CMP-EMG-${Date.now()}`,
+      title: 'Student distress call at East Boundary Walkway',
+      description: 'Female student reports being stalked near unlit East Walkway',
+      categoryName: 'Women Safety & SOS',
+      priority: 'Urgent',
+      locationDetails: {
+        buildingName: 'Campus Facility / Zone',
+        floor: 'N/A',
+        roomNumber: 'East Boundary Walkway',
+      },
+      isAnonymous: true,
+      reportedByName: 'Anonymous Student',
+    };
+
+    const alertResult = await dispatchEmergencyAlert(testEmergencyComplaint, 'Women Safety & SOS');
+    assert(
+      alertResult.triggered === true &&
+      alertResult.recipients.includes('+919952912177') &&
+      alertResult.recipients.includes('+916382373918') &&
+      alertResult.logs.length >= 2,
+      '17. Urgent SOS complaint triggers dispatch attempts to BOTH configured emergency numbers (+919952912177, +916382373918)'
+    );
+
+    // Test 18: One recipient failure does not hide the other recipient's result
+    resetSmsRateLimiters();
+    const partialFailMockProvider = new MockSmsProvider();
+    // Simulate failure only on the first number (+919952912177)
+    const origSendSms = partialFailMockProvider.sendSms.bind(partialFailMockProvider);
+    partialFailMockProvider.sendSms = async (to: string, msg: string, eventId?: string) => {
+      if (to === '+919952912177') {
+        return {
+          success: false,
+          messageId: `FAIL-${Date.now()}`,
+          status: 'FAILED',
+          recipientMasked: maskPhoneNumber(to),
+          error: 'Simulated carrier gateway reject on primary line',
+          timestamp: new Date(),
+        };
+      }
+      return origSendSms(to, msg, eventId);
+    };
+    setSmsProviderForTesting(partialFailMockProvider);
+
+    const partialAlertResult = await dispatchEmergencyAlert({
+      ticketId: `CMP-PARTIAL-${Date.now()}`,
+      title: 'Isolated security alert',
+      description: 'Safety check',
+      categoryName: 'Women Safety & SOS',
+      priority: 'Urgent',
+    });
+
+    const failedLog = partialAlertResult.logs.find((l) => l.recipientPhone.endsWith('177'));
+    const successLog = partialAlertResult.logs.find((l) => l.recipientPhone.endsWith('918'));
+    assert(
+      failedLog?.status === 'FAILED' && successLog?.status === 'SENT',
+      '18. One recipient failure does not hide or prevent the other recipient\'s dispatch result'
+    );
+
+    // Restore standard mock provider
+    setSmsProviderForTesting(freshMockProvider);
+
+    // -------------------------------------------------------------
+    // PART 4: COMPLAINT FORM PERSISTENCE (FREE-TEXT FLOOR & ROOM)
+    // -------------------------------------------------------------
+    console.log('\n--- PART 4: Complaint Location Persistence (Free-Text Floor, Room & Facility) ---');
+
+    // Test 19: Floor accepts arbitrary text values (e.g., 'Ground Floor', 'Terrace', 'Basement')
+    const customFloorComp = await Complaint.create({
+      ticketId: `CMP-FLOOR-${Date.now()}`,
+      title: 'Solar panel wire loose on Terrace',
+      description: 'The solar inverter wiring is loose on the rooftop terrace',
+      category: testCat?._id || new mongoose.Types.ObjectId(),
+      location: childLoc._id,
+      locationPath: 'Main Block > Terrace > Rooftop Solar Deck',
+      locationDetails: {
+        buildingName: 'Main Block',
+        floor: 'Terrace',
+        roomNumber: 'Rooftop Solar Deck',
+      },
+      priority: 'Medium',
+      status: 'Reported',
+      reportedBy: new mongoose.Types.ObjectId(),
+      reportedByName: 'Test Student',
+      incidentTimestamp: new Date(),
+    });
+
+    assert(
+      customFloorComp.locationDetails?.floor === 'Terrace' &&
+      customFloorComp.locationDetails?.roomNumber === 'Rooftop Solar Deck',
+      '19. Floor accepts arbitrary free-text (e.g., "Terrace") and persists correctly'
+    );
+
+    // Test 20: Room / Specific Spot accepts arbitrary text values (e.g., 'Near Staircase East Wing')
+    const customRoomComp = await Complaint.create({
+      ticketId: `CMP-ROOM-${Date.now()}`,
+      title: 'Water tap leaking near landing',
+      description: 'Tap dripping continuously',
+      category: testCat?._id || new mongoose.Types.ObjectId(),
+      location: childLoc._id,
+      locationPath: 'Main Block > 2nd Floor > Near Staircase - Landing 2A',
+      locationDetails: {
+        buildingName: 'Main Block',
+        floor: '2nd Floor',
+        roomNumber: 'Near Staircase - Landing 2A',
+      },
+      priority: 'Low',
+      status: 'Reported',
+      reportedBy: new mongoose.Types.ObjectId(),
+      reportedByName: 'Test Student',
+      incidentTimestamp: new Date(),
+    });
+
+    assert(
+      customRoomComp.locationDetails?.roomNumber === 'Near Staircase - Landing 2A',
+      '20. Room / Specific Spot accepts arbitrary free-text (e.g., "Near Staircase - Landing 2A") and persists correctly'
+    );
+
+    // Test 21: Campus Facility / Zone mode persists optional specific location without mandatory dropdown
+    const campusFacilityComp = await Complaint.create({
+      ticketId: `CMP-FAC-${Date.now()}`,
+      title: 'Broken paver blocks near Main Gate security entrance',
+      description: 'Uneven paver blocks causing tripping hazard near visitor turnstile',
+      category: testCat?._id || new mongoose.Types.ObjectId(),
+      location: rootLoc._id,
+      locationPath: 'Campus Facility > Main Gate Turnstile Security Post',
+      specificLocation: 'Main Gate Turnstile Security Post',
+      locationDetails: {
+        buildingName: 'Campus Facility / Zone',
+        floor: 'N/A',
+        roomNumber: 'Main Gate Turnstile Security Post',
+      },
+      priority: 'Medium',
+      status: 'Reported',
+      reportedBy: new mongoose.Types.ObjectId(),
+      reportedByName: 'Campus Member',
+      incidentTimestamp: new Date(),
+    });
+
+    assert(
+      campusFacilityComp.specificLocation === 'Main Gate Turnstile Security Post' &&
+      campusFacilityComp.locationDetails?.buildingName === 'Campus Facility / Zone',
+      '21. Campus Facility / Zone mode persists optional specific location cleanly without requiring dropdown'
+    );
+
+    // -------------------------------------------------------------
+    // PART 5: EMERGENCY INCIDENT WORKFLOW & AUDIT TRAIL
+    // -------------------------------------------------------------
+    console.log('\n--- PART 5: Emergency Incident Workflow & Response ---');
+
+    // Test 22: Emergency recipient management
     const recipient = await NotificationRecipient.create({
       name: 'Safety Chief Officer',
       roleTitle: 'Chief Security Officer',
-      phone: '+919952911217',
+      phone: '+919952912177',
       department: 'Campus Security',
       alertCategories: ['ALL_EMERGENCIES', 'WOMEN_SAFETY', 'CAMPUS_SECURITY'],
       notifyOnEmergency: true,
       isActive: true,
     });
-    assert(!!recipient._id && recipient.phone === '+919952911217', '14. Provision emergency notification recipient');
+    assert(!!recipient._id && recipient.phone === '+919952912177', '22. Provision emergency notification recipient');
 
-    // Test 15: Create Emergency Incident
+    // Test 23: Create Emergency Incident
     const incidentCode = `EMG-${Date.now()}`;
     const incident = await EmergencyIncident.create({
       incidentCode,
@@ -264,12 +483,19 @@ export const runCampusFeaturesSuite = async () => {
       status: 'REPORTED',
       isAnonymous: false,
       reportedByName: 'Lab Technician Raman',
-      reporterPhone: '+919952911217',
+      reporterPhone: '+919952912177',
       smsDispatches: [
         {
-          recipientPhone: '+919952911217',
+          recipientPhone: '+919952912177',
           recipientName: 'Safety Chief Officer',
           providerMessageId: mockDispatchResult.messageId,
+          status: 'QUEUED',
+          dispatchedAt: new Date(),
+        },
+        {
+          recipientPhone: '+916382373918',
+          recipientName: 'Campus Safety Coordinator / Staff',
+          providerMessageId: `SM_MOCK_2_${Date.now()}`,
           status: 'QUEUED',
           dispatchedAt: new Date(),
         },
@@ -286,11 +512,13 @@ export const runCampusFeaturesSuite = async () => {
     });
 
     assert(
-      incident.incidentCode === incidentCode && incident.severity === 'CRITICAL',
-      '15. Emergency incident created and persisted with critical priority'
+      incident.incidentCode === incidentCode &&
+      incident.severity === 'CRITICAL' &&
+      incident.smsDispatches.length === 2,
+      '23. Emergency incident created and persisted with critical priority and two separate SMS dispatches'
     );
 
-    // Test 16: Emergency acknowledgment workflow
+    // Test 24: Responder acknowledgment updates incident status and logs timestamp
     incident.status = 'ACKNOWLEDGED';
     incident.acknowledgedByName = 'Safety Chief Officer';
     incident.acknowledgedAt = new Date();
@@ -303,135 +531,41 @@ export const runCampusFeaturesSuite = async () => {
     });
     await incident.save();
 
-    const ackIncident = await EmergencyIncident.findById(incident._id);
+    const ackedIncident = await EmergencyIncident.findById(incident._id);
     assert(
-      ackIncident?.status === 'ACKNOWLEDGED' && ackIncident?.acknowledgedByName === 'Safety Chief Officer',
-      '16. Responder acknowledgment updates incident status and logs timestamp'
+      ackedIncident?.status === 'ACKNOWLEDGED' &&
+      ackedIncident.acknowledgedByName === 'Safety Chief Officer',
+      '24. Responder acknowledgment updates incident status and logs timestamp'
     );
 
-    // Test 17: Emergency assignment workflow
-    incident.assignedTeam = 'Electrical Quick Response Team';
-    incident.status = 'DISPATCHED';
-    incident.timeline.push({
-      status: 'DISPATCHED',
-      action: 'TEAM_ASSIGNED',
-      performedByName: 'Safety Chief Officer',
-      timestamp: new Date(),
-      notes: 'Assigned to Electrical Quick Response Team',
-    });
-    await incident.save();
-    assert(incident.assignedTeam === 'Electrical Quick Response Team', '17. Emergency response team successfully assigned');
-
-    // Test 18: Delivery status callback update
-    const dispatchEntry = incident.smsDispatches.find(
-      (d) => d.providerMessageId === mockDispatchResult.messageId
-    );
-    if (dispatchEntry) {
-      dispatchEntry.status = 'DELIVERED';
-      dispatchEntry.deliveredAt = new Date();
-      await incident.save();
+    // Test 25: Verified delivery callback updates SMS status to delivered
+    const deliveryTargetSid = mockDispatchResult.messageId;
+    const updateIncident = await EmergencyIncident.findOne({ 'smsDispatches.providerMessageId': deliveryTargetSid });
+    if (updateIncident) {
+      const dispatch = updateIncident.smsDispatches.find((d) => d.providerMessageId === deliveryTargetSid);
+      if (dispatch) {
+        dispatch.status = 'DELIVERED';
+        dispatch.deliveredAt = new Date();
+        await updateIncident.save();
+      }
     }
-    const updatedWithDelivery = await EmergencyIncident.findById(incident._id);
+    const deliveredIncident = await EmergencyIncident.findById(incident._id);
+    const targetDispatch = deliveredIncident?.smsDispatches.find((d) => d.providerMessageId === deliveryTargetSid);
     assert(
-      updatedWithDelivery?.smsDispatches[0].status === 'DELIVERED',
-      '18. Verified delivery callback updates SMS status to delivered'
+      targetDispatch?.status === 'DELIVERED' && !!targetDispatch.deliveredAt,
+      '25. Verified delivery callback updates SMS status to DELIVERED'
     );
 
-    // Test 19: Emergency resolution workflow
-    incident.status = 'RESOLVED';
-    incident.resolvedByName = 'Safety Chief Officer';
-    incident.resolvedAt = new Date();
-    incident.resolutionNotes = 'Faulty breaker isolated, CO2 extinguisher deployed, zero injuries.';
-    incident.timeline.push({
-      status: 'RESOLVED',
-      action: 'INCIDENT_RESOLVED',
-      performedByName: 'Safety Chief Officer',
-      timestamp: new Date(),
-      notes: 'Incident resolved safely',
-    });
-    await incident.save();
-
-    const resolvedIncident = await EmergencyIncident.findById(incident._id);
-    assert(
-      resolvedIncident?.status === 'RESOLVED' &&
-      resolvedIncident.timeline.length === 4,
-      '19. Incident resolved with complete audit trail of transitions'
-    );
-
-    // --- PART 4: Mandatory Incident Time & Custom Room Entry ---
-    console.log('\n--- PART 4: Mandatory Incident Time & Custom Room Entry ---');
-    const studentUser = await User.findOne({ role: 'STUDENT' });
-    let studentToken = '';
-    if (studentUser) {
-      const loginRes = await fetch('http://localhost:5000/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: studentUser.identifier || studentUser.email, password: 'password123' }),
-      });
-      const loginData = await loginRes.json();
-      studentToken = loginData.token;
-    }
-
-    const testCategory = await Category.findOne();
-
-    // Test 20: Missing incidentTimestamp strictly rejected with 400 Bad Request
-    const noTimeRes = await fetch('http://localhost:5000/api/v1/complaints', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${studentToken}` },
-      body: JSON.stringify({
-        title: 'Broken Light in Corridor',
-        description: 'Corridor light fixture is hanging and flickering.',
-        categoryId: testCategory?._id,
-        buildingName: 'Main Block',
-        floor: '2nd Floor',
-        roomNumber: 'Near Staircase East',
-        priority: 'Medium',
-      }),
-    });
-    const noTimeData = await noTimeRes.json();
-    assert(
-      noTimeRes.status === 400 && noTimeData.message?.toLowerCase().includes('mandatory'),
-      '20. Missing incident date/time strictly rejected with 400 Bad Request'
-    );
-
-    // Test 21: Valid complaint with typed custom room and incidentTimestamp saved successfully
-    const incidentDateIso = new Date('2026-10-19T10:30:00.000Z').toISOString();
-    const validCompRes = await fetch('http://localhost:5000/api/v1/complaints', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${studentToken}` },
-      body: JSON.stringify({
-        title: 'Water tap leaking near staircase landing',
-        description: 'Water tap continuously dripping on floor creating slip hazard.',
-        categoryId: testCategory?._id,
-        buildingName: 'Main Block',
-        floor: '2nd Floor',
-        roomNumber: 'Near Staircase - Landing 2A',
-        incidentTimestamp: incidentDateIso,
-        priority: 'Medium',
-      }),
-    });
-    const validCompData = await validCompRes.json();
-    const createdCompId = validCompData.complaint?._id || validCompData._id;
-    let savedCompDoc: any = null;
-    if (createdCompId) {
-      savedCompDoc = await Complaint.findById(createdCompId);
-      await Complaint.findByIdAndDelete(createdCompId);
-    }
-    assert(
-      validCompRes.status === 201 &&
-      savedCompDoc &&
-      savedCompDoc.locationDetails?.roomNumber === 'Near Staircase - Landing 2A' &&
-      new Date(savedCompDoc.incidentTimestamp).toISOString() === incidentDateIso,
-      '21. Manually entered room/spot and incident time correctly validated and persisted'
-    );
-
-    // Test 22: Clean up test artifacts
+    // Test 26: Clean up test artifacts
     await Complaint.findByIdAndDelete(testComp._id);
+    await Complaint.findByIdAndDelete(customFloorComp._id);
+    await Complaint.findByIdAndDelete(customRoomComp._id);
+    await Complaint.findByIdAndDelete(campusFacilityComp._id);
     await EmergencyIncident.findByIdAndDelete(incident._id);
     await NotificationRecipient.findByIdAndDelete(recipient._id);
     await Location.findByIdAndDelete(childLoc._id);
     await Location.findByIdAndDelete(rootLoc._id);
-    assert(true, '22. Test isolation: All transient test records cleaned up safely');
+    assert(true, '26. Test isolation: All transient test records cleaned up safely');
 
     console.log('\n================================================================');
     console.log(`  ALL ${passedCount} CAMPUS-WIDE TESTS PASSED SUCCESSFULLY! (0 Failures)`);

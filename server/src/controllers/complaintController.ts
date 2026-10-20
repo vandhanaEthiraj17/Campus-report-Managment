@@ -5,17 +5,20 @@ import { Location } from '../models/Location';
 import { Category } from '../models/Category';
 import { User } from '../models/User';
 import { Asset } from '../models/Asset';
+import { EmergencyIncident } from '../models/EmergencyIncident';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { translateToEnglish, containsNonEnglishScript } from '../services/translationService';
 import { 
   isHighRiskOrWomenSafety, 
   dispatchEmergencyAlert, 
-  getEmergencyDispatchLogs 
+  getEmergencyDispatchLogs,
+  maskPhoneNumber,
 } from '../services/emergencyNotificationService';
 import {
   emitComplaintCreated,
   emitComplaintAssigned,
   emitComplaintStatusChanged,
+  emitEmergencyIncidentCreated,
 } from '../services/socketService';
 
 // Helper to sanitize complaint data and strip PII if isAnonymous is true
@@ -159,9 +162,11 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       assetId,
       assetCode,
       incidentTimestamp,
+      specificLocation,
+      locationPath,
     } = req.body;
 
-    // Resolve location either by locationId or building/floor/room
+    // Resolve location either by locationId, building/floor/room, or campus facility specificLocation
     let locationDoc: any = null;
     if (locationId && Types.ObjectId.isValid(locationId)) {
       locationDoc = await Location.findById(locationId);
@@ -169,10 +174,45 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
     if (!locationDoc && buildingName && floor && roomNumber) {
       locationDoc = await Location.findOne({ buildingName, floor, roomNumber });
       if (!locationDoc) {
-        locationDoc = await Location.create({ buildingName, floor, roomNumber });
+        locationDoc = await Location.create({
+          buildingName,
+          floor,
+          roomNumber,
+          fullPath: locationPath || `${buildingName} > ${floor} > ${roomNumber}`,
+          name: `${buildingName} - ${roomNumber}`,
+        });
       }
     } else if (!locationDoc && buildingName) {
       locationDoc = await Location.findOne({ buildingName });
+      if (!locationDoc) {
+        locationDoc = await Location.create({
+          buildingName,
+          floor: floor || 'N/A',
+          roomNumber: roomNumber || specificLocation || 'General Area',
+          fullPath: locationPath || `${buildingName} > ${roomNumber || specificLocation || 'General Area'}`,
+          name: `${buildingName} - ${roomNumber || specificLocation || 'General Area'}`,
+        });
+      }
+    } else if (!locationDoc && specificLocation) {
+      locationDoc = await Location.create({
+        buildingName: 'Campus Facility / Zone',
+        floor: 'N/A',
+        roomNumber: specificLocation,
+        fullPath: `Campus Facility > ${specificLocation}`,
+        name: `Campus Facility - ${specificLocation}`,
+        locationType: 'OTHER_FACILITY',
+        structureType: 'ZONE_BASED',
+      });
+    }
+
+    if (!locationDoc) {
+      locationDoc = (await Location.findOne()) || (await Location.create({
+        code: `LOC-GEN-${Math.floor(1000 + Math.random() * 9000)}`,
+        name: 'Main Campus General Area',
+        locationType: 'OTHER_FACILITY',
+        structureType: 'STANDALONE',
+        fullPath: 'Main Campus > General Area',
+      }));
     }
 
     if (!incidentTimestamp) {
@@ -296,6 +336,7 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       subcategory: subcategory ? String(subcategory).trim() : undefined,
       location: locationDoc._id,
       locationPath: resolvedFullPath,
+      specificLocation: specificLocation ? String(specificLocation).trim() : undefined,
       locationDetails: {
         buildingName: resolvedBuilding,
         floor: resolvedFloor,
@@ -329,7 +370,7 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
       ],
     });
 
-    // If High Risk or Women Safety, dispatch instant SMS notification to HOD & Coordinators
+    // If High Risk or Women Safety, dispatch instant SMS notification to both emergency contact numbers
     if (isEmergency) {
       try {
         const alertResult = await dispatchEmergencyAlert(newComplaint, categoryDoc ? categoryDoc.name : undefined);
@@ -337,14 +378,55 @@ export const createComplaint = async (req: AuthRequest, res: Response): Promise<
         newComplaint.emergencyRecipients = alertResult.recipients;
         newComplaint.emergencySentAt = new Date();
 
+        const maskedRecipientList = alertResult.recipients.map((r) => maskPhoneNumber(r)).join(', ');
         newComplaint.timeline.push({
           status: 'Escalated',
           updatedByName: 'Emergency Mobile SMS Gateway',
           timestamp: new Date(),
-          remarks: `🚨 EMERGENCY SMS DISPATCHED: Mobile alert sent to HOD & Coordinators (${alertResult.recipients.join(', ')}) for immediate response.`,
+          remarks: `🚨 EMERGENCY SMS DISPATCHED: Mobile alert dispatched to Emergency Contacts (${maskedRecipientList}) for immediate response.`,
         });
 
         await newComplaint.save();
+
+        // Also synchronize with Emergency Incident model for the Emergency Dashboard
+        try {
+          const emergencyIncident = await EmergencyIncident.create({
+            incidentCode: `EMG-${newComplaint.ticketId}`,
+            title: newComplaint.title,
+            description: newComplaint.description,
+            category: isWomenSafetyIssue ? 'WOMEN_SAFETY' : (categoryDoc?.name || 'EMERGENCY_SAFETY'),
+            severity: 'CRITICAL',
+            location: locationDoc._id,
+            locationName: resolvedBuilding,
+            locationPath: resolvedFullPath,
+            reportedBy: isAnon ? undefined : req.user.userId,
+            reportedByName: isAnon ? 'Anonymous Campus Member' : req.user.name,
+            isAnonymous: isAnon,
+            assignedTeam: isWomenSafetyIssue ? 'Women Safety Cell & Security Taskforce' : 'Campus Rapid Emergency Response Desk',
+            status: 'REPORTED',
+            linkedComplaintId: newComplaint._id,
+            smsDispatches: alertResult.logs.map((l) => ({
+              recipientPhone: l.recipientPhone,
+              recipientName: l.recipientRole,
+              providerMessageId: l.carrierMessageId,
+              status: l.status,
+              dispatchedAt: l.sentAt,
+              errorMessage: l.status === 'FAILED' ? l.notes : undefined,
+            })),
+            timeline: [
+              {
+                status: 'REPORTED',
+                action: 'Emergency incident created from complaint',
+                performedByName: isAnon ? 'Anonymous Campus Member' : req.user.name,
+                timestamp: new Date(),
+                notes: `Complaint ${newComplaint.ticketId} triggered emergency SMS response`,
+              },
+            ],
+          });
+          emitEmergencyIncidentCreated(emergencyIncident);
+        } catch (emgErr) {
+          console.error('Failed to create linked EmergencyIncident:', emgErr);
+        }
       } catch (smsErr) {
         console.error('Failed to dispatch emergency SMS notification:', smsErr);
       }

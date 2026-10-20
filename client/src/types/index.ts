@@ -79,6 +79,7 @@ export interface IComplaint {
     floor: string;
     roomNumber: string;
   };
+  specificLocation?: string;
   reportedBy: IUser | string;
   reporterUserId?: string;
   reportedByName?: string;

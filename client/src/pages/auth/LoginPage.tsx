@@ -106,10 +106,15 @@ export const LoginPage: React.FC = () => {
       await login(id, pass, role);
     } catch (err: any) {
       console.error('Quick login error:', err);
+      const isNetworkOrProxy =
+        err.message?.includes('Network') ||
+        err.code === 'ERR_BAD_RESPONSE' ||
+        err.code === 'ERR_NETWORK' ||
+        (err.response?.status && err.response.status >= 500 && !err.response.data?.message);
       setErrorMsg(
         err.response?.data?.message ||
-        (err.message?.includes('Network')
-          ? 'Cannot connect to backend server. Please verify the backend is running.'
+        (isNetworkOrProxy
+          ? 'Cannot connect to backend server. Please verify the backend service is running on port 5000.'
           : `Failed to sign in as ${role}`)
       );
     } finally {
@@ -146,10 +151,15 @@ export const LoginPage: React.FC = () => {
       await login(identifier.trim(), password, selectedRole);
     } catch (err: any) {
       console.error('Sign in error:', err);
+      const isNetworkOrProxy =
+        err.message?.includes('Network') ||
+        err.code === 'ERR_BAD_RESPONSE' ||
+        err.code === 'ERR_NETWORK' ||
+        (err.response?.status && err.response.status >= 500 && !err.response.data?.message);
       setErrorMsg(
         err.response?.data?.message ||
-        (err.message?.includes('Network')
-          ? 'Cannot connect to server. Please verify backend service.'
+        (isNetworkOrProxy
+          ? 'Cannot connect to backend server. Please verify the backend service is running on port 5000.'
           : 'Invalid ID, Register Number, or password. Please try again.')
       );
     } finally {

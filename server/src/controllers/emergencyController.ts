@@ -8,7 +8,7 @@ import {
   emitEmergencyIncidentCreated,
   emitEmergencyIncidentUpdated,
 } from '../services/socketService';
-import { maskPhoneNumber } from '../services/emergencyNotificationService';
+import { maskPhoneNumber, getEmergencyContactNumbers } from '../services/emergencyNotificationService';
 
 interface AuthRequest extends Request {
   user?: {
@@ -118,61 +118,35 @@ export const createEmergencyIncident = async (req: AuthRequest, res: Response): 
       ],
     });
 
-    // 2. Query configured emergency recipients
-    const recipientQuery: any = { isActive: true, notifyOnEmergency: true };
-    if (category) {
-      recipientQuery.$or = [
-        { alertCategories: 'ALL_EMERGENCIES' },
-        { alertCategories: category },
-      ];
-    }
-    const recipients = await NotificationRecipient.find(recipientQuery);
-
-    // Fallback numbers if no database recipients configured yet
-    const fallbackNumbers = (process.env.EMERGENCY_ALERT_NUMBERS || '99529112177,6382373918')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // 2. Query configured emergency recipients (includes +919952912177 and +916382373918)
+    const contacts = await getEmergencyContactNumbers();
 
     const smsProvider = getSmsProvider();
-    const smsMessage = 
-`🚨 [CAMPUS EMERGENCY ALERT: ${incident.incidentCode}]
-SEVERITY: ${incident.severity}
-CATEGORY: ${incident.category}
-LOCATION: ${incident.locationPath}
-ISSUE: ${incident.title}
-REPORTER: ${reportedByName}
-TIME: ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+    const formattedIncidentTime = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
 
-Respond immediately via Emergency Portal: http://localhost:3000`;
+    const smsMessage = 
+`SMARTCAMPUS EMERGENCY ALERT
+Incident: ${incident.incidentCode}
+Type: ${incident.category}
+Location: ${incident.locationPath}
+Time: ${formattedIncidentTime}
+Please check the authorized SmartCampus emergency dashboard and respond according to campus emergency procedures.`;
 
     // 3. Dispatch SMS alerts to recipients
     const dispatchedPhones = new Set<string>();
 
-    for (const rec of recipients) {
+    for (const rec of contacts) {
       if (dispatchedPhones.has(rec.phone)) continue;
       dispatchedPhones.add(rec.phone);
 
       const dispatchResult = await smsProvider.sendSms(rec.phone, smsMessage, incident.incidentCode);
       incident.smsDispatches.push({
         recipientPhone: maskPhoneNumber(rec.phone),
-        recipientName: rec.name,
-        providerMessageId: dispatchResult.messageId,
-        status: dispatchResult.status,
-        dispatchedAt: new Date(),
-        errorMessage: dispatchResult.error,
-      });
-    }
-
-    // Add fallback numbers if needed
-    for (const num of fallbackNumbers) {
-      if (dispatchedPhones.has(num)) continue;
-      dispatchedPhones.add(num);
-
-      const dispatchResult = await smsProvider.sendSms(num, smsMessage, incident.incidentCode);
-      incident.smsDispatches.push({
-        recipientPhone: maskPhoneNumber(num),
-        recipientName: 'Designated Safety Coordinator',
+        recipientName: rec.label,
         providerMessageId: dispatchResult.messageId,
         status: dispatchResult.status,
         dispatchedAt: new Date(),
